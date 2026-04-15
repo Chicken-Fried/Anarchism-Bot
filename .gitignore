@@ -1,0 +1,72 @@
+# --- SÉCURITÉ ---
+# Ne jamais envoyer le token ou les secrets
+.env
+
+# --- DONNÉES LOCALES (Sera sur le laptop, pas sur GitHub) ---
+# On ignore les bases de données et les fichiers de travail du bot
+data/
+database/
+logs/
+frontend/
+wrpl/replays/
+wrpl/user_data/
+images/logo/
+images/maps/
+images/vehicles/
+core/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+wrpl_parser.py
+poller.py
+setup_session.py
+setup_session_server.py
+session_wt.py
+db_replay.py
+diag_wrpl.py
+all_units.json
+fetcher_sqb_schedular.py
+renderer_log_v6.py
+welcome_roles.py
+
+# --- Base de données et Données locales ---
+# On ignore le contenu du dossier data, mais pas le dossier lui-même
+data/*
+!data/.gitkeep
+
+replays/*
+!replays/.gitkeep
+*.log
+
+logs/*
+!logs/.gitkeep
+
+frontend/*
+!frontend/.gitkeep
+
+database/*
+!database/.gitkeep
+
+images/*
+!images/.gitkeep
+
+
+# Si tu as un fichier sqlite spécifique à la racine
+*.sqlite
+*.db
+
+# --- Docker ---
+.dockerignore
+
+# --- OS spécifiques ---
+.DS_Store
+Thumbs.db

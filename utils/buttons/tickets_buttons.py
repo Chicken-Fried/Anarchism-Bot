@@ -1,0 +1,839 @@
+import os
+import nextcord
+import asyncio
+from nextcord import PermissionOverwrite
+from nextcord.ui.select import channel
+from unicodedata import category
+
+from database.db_tickets import TicketsDB
+from utils.tickets_log import save_channel_to_json
+from utils.inputs.tickets_inputs import AbsentModal
+from database.db_informations import InformationDB
+from database.models.tickets_class import Ticket, TicketGuilds, TicketViewChannels
+
+from dotenv import load_dotenv
+load_dotenv()
+TICKETS_LOG_CHANNEL_ID = os.getenv('STAFF_SERVER_TICKETS_LOG_CHANNEL_ID')
+GUILD_STAFF_SERVER_ID = os.getenv('GUILD_STAFF_SERVER_ID')
+
+
+# ── BUTTON OPEN TICKET ───────────────────────────────────────────────
+
+class OpenTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Ouvrir un ticket", style=nextcord.ButtonStyle.green, custom_id="open_ticket")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+        step_idx = 0
+
+        # Condition 1 : Si la catégorie = TICKETS = existe, alors on la maintient
+        cat_results = self.db.get_cat_ticket(interaction.guild_id, get_all=True)
+        category = None
+
+        print(f"[Tickets Views]    Cat_results: {cat_results}")
+        print(f"[Tickets Views]    Isinstance - TicketGuilds: {isinstance(cat_results, TicketGuilds)}")
+        print(f"[Tickets Views]    Isinstance - list: {isinstance(cat_results, list)}")
+
+        if isinstance(cat_results, TicketGuilds):
+            category = guild.get_channel(cat_results.category_id)
+
+            if category:
+                print(f"[Tickets Views]   Ouverture d'un ticket | "
+                      f"Catégorie déjà existante dans la base de données")
+
+        # Condition 2 : Si les catégories Ticket existent, on va tous les supprimer pour en créer qu'une
+        elif isinstance(cat_results, list):
+            i = 0
+            for cat in cat_results[:]:
+                category = guild.get_channel(cat.category_id)
+                print(f"[Tickets Views]    Category: {category}")
+                i += 1
+                if category is None:
+                    self.db.supress_cat_ticket(cat)
+                    cat_results.remove(cat)
+                    continue
+
+                await category.delete()
+                self.db.supress_cat_ticket(cat)
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | "
+                  f"Suppression de l'ensemble des catégories ouverte dans la meme guild - Nombre: {i}")
+
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                          read_message_history=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
+            category = await guild.create_category(
+                name="= TICKETS =",
+                overwrites=overwrites
+            )
+
+            data = TicketGuilds(
+                guild_id=guild.id,
+                category_id=category.id
+            )
+            self.db.insert_cat_ticket(data)
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'une catégorie {category.name}")
+
+        # Condition 3 : Si la catégorie Ticket n'existe pas, alors on le crée
+        if cat_results is None or category is None:
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                          read_message_history=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
+            category = await guild.create_category(
+                name="= TICKETS =",
+                overwrites=overwrites
+            )
+
+            data = TicketGuilds(
+                guild_id=guild.id,
+                category_id=category.id
+            )
+            self.db.insert_cat_ticket(data)
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'une catégorie {category.name}")
+
+
+
+        channel_results = self.db.get_tickets(interaction.guild_id, interaction.user.id, get_all=True)
+        channel = None
+
+        print(f"[Tickets Views]    Channel_results: {channel_results}")
+        print(f"[Tickets Views]    Isinstance - Ticket: {isinstance(channel_results, Ticket)}")
+        print(f"[Tickets Views]    Isinstance - list: {isinstance(channel_results, list)}")
+
+        # Condition 4 : Si le ticket de l'utilisateur existe, alors on la maintient
+        if isinstance(channel_results, Ticket):
+            channel = guild.get_channel(channel_results.channel_id)
+
+            if channel:
+                await interaction.response.send_message(
+                    f"Il existe un ticket ouvert à ton nom, je t'invite à t'y rendre {channel.mention}",
+                    ephemeral=True,
+                    delete_after=10
+                )
+
+                print(f"[Tickets Views]   Ouverture d'un ticket | "
+                      f"Ticket déjà existant dans la base de données")
+
+
+        # Condition 5 : Si plusieurs tickets de l'utilisateur existe, alors on supprimer tous et on en crée une seule
+        elif isinstance(channel_results, list):
+            i = 0
+            for ch in channel_results[:]:
+                channel = guild.get_channel(ch.channel_id)
+                print(f"[Tickets Views]    Channel: {channel}")
+                i+=1
+
+                if channel is None:
+                    self.db.supress_ticket(ch)
+                    channel_results.remove(ch)
+                    continue
+
+                await channel.delete()
+                self.db.supress_ticket(ch)
+
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | "
+                  f"Suppression de {i} tickets de l'utilisateur {user.name}")
+
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                          read_message_history=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
+            new_channel = await guild.create_text_channel(
+                name=f"🐍-ticket-{user.name}",
+                overwrites=overwrites,
+                category=category
+            )
+
+            data = Ticket(
+                guild_id=guild.id,
+                category_id=category.id,
+                step=step_idx,
+                channel_id=new_channel.id,
+                user_id=user.id,
+                user_name=user.name,
+            )
+            self.db.insert_ticket(data)
+
+            view.update_components(interaction, data)
+
+            await new_channel.send(
+                embeds=view.embd_choice_reason(),
+                view=view
+            )
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'un ticket pour l'utilisateur {user.name}")
+
+            await interaction.response.send_message(
+                f"Ton ticket a été créé : {new_channel.mention}",
+                ephemeral=True,
+                delete_after=10
+            )
+            return
+
+        # Condition 5 : Si aucun ticket ouvert, on en crée un
+        if channel_results is None or channel is None:
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                          read_message_history=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
+            new_channel = await guild.create_text_channel(
+                name=f"🐍-ticket-{user.name}",
+                overwrites=overwrites,
+                category=category
+            )
+
+            data = Ticket(
+                guild_id=guild.id,
+                category_id=category.id,
+                step=step_idx,
+                channel_id=new_channel.id,
+                user_id=user.id,
+                user_name=user.name,
+            )
+            self.db.insert_ticket(data)
+
+            view.update_components(interaction, data)
+
+            await new_channel.send(
+                embeds=view.embd_choice_reason(),
+                view=view
+            )
+
+            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'un ticket' pour l'utilisateur {user.name}")
+
+            await interaction.response.send_message(
+                f"Ton ticket a été créé : {new_channel.mention}",
+                ephemeral=True,
+                delete_after=10
+            )
+
+
+
+# ── BUTTON CHOICES #1 ────────────────────────────────────────────────
+
+class CloseTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Fermer le ticket", style=nextcord.ButtonStyle.grey, custom_id="close_ticket")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        user = interaction.user
+
+        if not interaction.user.guild_permissions.administrator:
+            print(f"[Tickets Views]   Tentative de fermeture d'un ticket | Par l'utilisateur {user.name}")
+            await interaction.response.send_message(
+                "❌ Tu n'as pas la permission d'utiliser ce bouton.",
+                ephemeral=True
+            )
+            return
+        view = self.view
+
+        ticket = self.db.get_open_ticket(
+            guild_id=interaction.guild.id, channel_id=interaction.channel.id)
+
+        print(f"CloseButton      :{ticket}\nGuild_id: {interaction.guild.id} | Channel_id: {interaction.channel.id}")
+
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors de la fermeture d'un ticket | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors de la fermeture du ticket, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        ticket.step = 2
+
+        view.update_components(interaction, ticket)
+
+        print(f"[Tickets Views]   Fermeture d'un ticket | Par l'utilisateur {user.name}")
+
+        #self.db.supress_ticket(ticket)
+
+        await interaction.response.edit_message(
+            embeds=view.embd_confirmation(),
+            view=view
+        )
+
+class BackTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Retour en arrière", style=nextcord.ButtonStyle.blurple, custom_id="step_back_ticket")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors du retour vers le menu des choix | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors du retour vers le menu des choix, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+        voice_channel = guild.get_channel(ticket.voice_channel_id)
+
+        if ticket.step > 0:
+            ticket.step -= 1
+            self.db.update_ticket(ticket)
+
+        for item in view.children:
+            item.disabled = True
+
+        if ticket.step == 0:
+            self.db.update_ticket(ticket)
+            view.update_components(interaction, ticket)
+
+            overwrite = PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                            read_message_history=True, attach_files=False)
+
+            await channel.set_permissions(user, overwrite=overwrite)
+
+            print(f"[Tickets Views]   Retour au menu des choix | Par l'utilisateur {user.name}")
+
+            async for message in channel.history(limit=100):
+                if message.author == interaction.user:
+                    await interaction.response.send_message(
+                        "Cela implique la suppresion de l'ensemble de la discussion du ticket !",
+                        ephemeral=True
+                    )
+
+            file_path = await save_channel_to_json(channel)
+
+            guild_staff = interaction.client.get_guild(int(GUILD_STAFF_SERVER_ID))
+            log_channel = guild_staff.get_channel(int(TICKETS_LOG_CHANNEL_ID))
+
+            if log_channel and file_path:
+                file_to_send = nextcord.File(file_path)
+                await log_channel.send(
+                    content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {ticket.user_name}\n"
+                            f"Canal: {channel.name}",
+                    file=file_to_send
+                )
+
+                print(f"[Tickets Views]   Archivage automatique du ticket!")
+
+            new_channel = await channel.clone()
+            await channel.delete()
+
+            await new_channel.send(
+                embeds=view.embd_choice_reason(),
+                view=view
+            )
+
+            if voice_channel:
+                await voice_channel.delete()
+
+            self.db.supress_ticket(ticket)
+
+            new_ticket = Ticket(
+                channel_id=new_channel.id,
+                guild_id=guild.id,
+                user_id=user.id,
+                user_name=user.name,
+                step=0
+            )
+            self.db.insert_ticket(new_ticket)
+
+            return
+
+        else:
+            self.db.update_ticket(ticket)
+            view.error_page[user.id] = 1
+
+            print(f"[Tickets Views]   ERREUR | Retour au menu des choix | Par l'utilisateur {user.name}")
+
+            await interaction.response.edit_message(
+                embeds=view.embd_choice_reason(),
+                view=view
+            )
+
+
+class CancelTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Annuler", style=nextcord.ButtonStyle.red, custom_id="cancel_ticket")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors de l'annulation du ticket | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors de l'annulation du ticket, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+        voice_channel = guild.get_channel(ticket.voice_channel_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        ticket.step = 3
+        view.update_components(interaction, ticket)
+        ticket.step = 0
+
+        self.db.update_ticket(ticket)
+
+        print(f"[Tickets Views]   Annulation du ticket | 🐍-ticket-{user.name} | Par l'utilisateur {user.name}")
+
+        async for message in channel.history(limit=100):
+            if message.author == interaction.user:
+                await interaction.response.send_message(
+                    "Cela implique la suppresion de l'ensemble de la discussion du ticket !",
+                    ephemeral=True
+                )
+
+                file_path = await save_channel_to_json(channel)
+
+                guild_staff = interaction.client.get_guild(int(GUILD_STAFF_SERVER_ID))
+                log_channel = guild_staff.get_channel(int(TICKETS_LOG_CHANNEL_ID))
+
+                if log_channel and file_path:
+                    file_to_send = nextcord.File(file_path)
+                    await log_channel.send(
+                        content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {ticket.user_name}\n"
+                                f"Canal: {channel.name}",
+                        file=file_to_send
+                    )
+
+                    print(f"[Tickets Views]   Archivage automatique du ticket!")
+
+                await asyncio.sleep(10)
+
+                new_channel = await channel.clone()
+                await channel.delete()
+
+                await new_channel.send(
+                    embeds=view.embd_choice_reason(),
+                    view=view
+                )
+
+                if voice_channel:
+                    await voice_channel.delete()
+
+                self.db.supress_ticket(ticket)
+
+                new_ticket = Ticket(
+                    channel_id=new_channel.id,
+                    guild_id=guild.id,
+                    user_id=user.id,
+                    user_name=user.name,
+                    step=0
+                )
+                self.db.insert_ticket(new_ticket)
+
+                return
+
+        file_path = await save_channel_to_json(channel)
+
+        guild_staff = interaction.client.get_guild(int(GUILD_STAFF_SERVER_ID))
+        log_channel = guild_staff.get_channel(int(TICKETS_LOG_CHANNEL_ID))
+
+        if log_channel and file_path:
+            file_to_send = nextcord.File(file_path)
+            await log_channel.send(
+                content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {ticket.user_name}\n"
+                        f"Canal: {channel.name}",
+                file=file_to_send
+            )
+
+            print(f"[Tickets Views]   Archivage automatique du ticket!")
+
+        await interaction.response.edit_message(
+            embeds=view.embd_cancel_ticket(),
+            view=view,
+            delete_after=10
+        )
+
+        await asyncio.sleep(10)
+
+        new_channel = await channel.clone()
+        await channel.delete()
+
+        if voice_channel:
+            await voice_channel.delete()
+
+        await new_channel.send(
+            embeds=view.embd_choice_reason(),
+            view=view
+        )
+
+        self.db.supress_ticket(ticket)
+
+        new_ticket = Ticket(
+            channel_id=new_channel.id,
+            guild_id=guild.id,
+            user_id=user.id,
+            user_name=user.name,
+            step=0
+        )
+        self.db.insert_ticket(new_ticket)
+
+
+# ── BUTTON CHOICES #2 ────────────────────────────────────────────────
+
+class RecruitementTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Effectuer une demande de recruitement", style=nextcord.ButtonStyle.grey,
+                         custom_id="recruitment_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors du choix effectué => Recrutement | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors du choix effectué => Recrutement, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+        category = guild.get_channel(ticket.category_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        ticket.step = 1
+        view.update_components(interaction, ticket)
+
+        self.db.update_ticket(ticket)
+
+        name_member = interaction.user.name
+
+        overwrites = {
+            guild.default_role: PermissionOverwrite(view_channel=False),
+            user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                      read_message_history=True, speak=True, attach_files=True, connect=True,
+                                      use_voice_activation=True),
+            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+
+        voice_channel = await guild.create_voice_channel(
+            name=f"Recrutement | {user.name}",
+            overwrites=overwrites,
+            category=category
+        )
+
+        ticket.voice_channel_id = voice_channel.id
+        ticket.reason_ticket = 0
+        self.db.update_ticket(ticket)
+
+        print(f"[Tickets Views]   Choix effectué => Recrutement | Création du vocal pour l'utilisateur {user.name}")
+
+        overwrite = PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                      read_message_history=True, attach_files=True)
+
+        await channel.set_permissions(user, overwrite=overwrite)
+
+        await interaction.response.edit_message(
+            embeds=view.embd_response_reason(ticket),
+            view=view
+        )
+
+class SuggestTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Introduire une suggestion", style=nextcord.ButtonStyle.grey, custom_id="suggest_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors du choix effectué => Suggestion | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors du choix effectué => Suggestion, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        ticket.step = 1
+        ticket.reason_ticket = 1
+        self.db.update_ticket(ticket)
+
+        view.update_components(interaction, ticket)
+
+        name_member = interaction.user.name
+
+        print(f"[Tickets Views]   Choix effectué => Suggestion | Utilisateur: {user.name}")
+
+        overwrite = PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                        read_message_history=True, attach_files=True)
+
+        await channel.set_permissions(user, overwrite=overwrite)
+
+        await interaction.response.edit_message(
+            embeds=view.embd_response_reason(ticket),
+            view=view
+        )
+
+class IssuesTicket(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Faire part d'un problème", style=nextcord.ButtonStyle.grey, custom_id="issue_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors du choix effectué => Problème | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors du choix effectué => Problème, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+
+        ticket.step = 1
+        view.update_components(interaction, ticket)
+
+        self.db.update_ticket(ticket)
+
+        name_member = interaction.user.name
+
+        print(f"[Tickets Views]   Choix effectué => Problème | Utilisateur: {user.name}")
+
+        overwrite = PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                        read_message_history=True, attach_files=True)
+
+        await channel.set_permissions(user, overwrite=overwrite)
+
+        ticket.reason_ticket = 2
+
+        self.db.update_ticket(ticket)
+
+        await interaction.response.edit_message(
+            embeds=view.embd_response_reason(ticket),
+            view=view
+        )
+
+
+class AbsentTicket(nextcord.ui.Button):
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Introduire une absence", style=nextcord.ButtonStyle.grey, custom_id="absent_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors du choix effectué => Absence | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors du choix effectué => Absence, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_modal(AbsentModal(db=self.db))
+
+        channel = guild.get_channel(ticket.channel_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        ticket.step = 1
+        self.db.update_ticket(ticket)
+
+        view.update_components(interaction, ticket)
+
+        print(f"[Tickets Views]   Choix effectué => Absence | Utilisateur: {user.name}")
+
+        """overwrite = PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                        read_message_history=True, attach_files=True)
+
+        await channel.set_permissions(user, overwrite=overwrite)"""
+
+        ticket.reason_ticket = 3
+        self.db.update_ticket(ticket)
+
+        await interaction.edit_original_message(
+            embeds=view.embd_response_reason(ticket),
+            view=view
+        )
+
+# ── BUTTON URL ─────────────────────────────────────────────────────────
+
+class UrlFormularyButton(nextcord.ui.Button):
+
+    def __init__(self):
+        super().__init__(label="Apposer la candidature", style=nextcord.ButtonStyle.green,
+                         url="https://docs.google.com/forms/d/e/1FAIpQLSe78vzCSrXA4c_t556UmeMJOA-ajl9-h1Lwrc01C7PgOVkmkA/viewform")
+
+    async def callback(self, interaction: nextcord.Interaction):
+        user = interaction.user
+
+        print(f"[Tickets Views]   Ouverture du lien URL => Par l'utilisateur: {user.name}")
+
+
+
+
+# ── BUTTON CONFIRMATION ────────────────────────────────────────────────
+
+class YesButton(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Oui", style=nextcord.ButtonStyle.green, custom_id="yes_ticket_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        print(f"YesButton      :{ticket}\n"
+              f"Guild_id: {guild.id} | Channel_id: {interaction.channel.id}")
+        if ticket is None:
+            print(f"[Tickets Views]   Erreur lors de la confirmation de fermeture du ticket | Par l'utilisateur {user.name} | "
+                  f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors de la confirmation de fermeture du ticket, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+        voice_channel = guild.get_channel(ticket.voice_channel_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        await interaction.response.edit_message(
+            embeds=view.embd_y_confirmation(),
+            view=view
+        )
+
+        if not voice_channel:
+            print(f"[Tickets Views]   Confirmation de fermeture du ticket => Par l'utilisateur: {user.name}"
+                  f" | Channel: 🐍-ticket-{user.name}")
+        else:
+            print(f"[Tickets Views]   Confirmation de fermeture du ticket => Par l'utilisateur: {user.name}"
+                  f" | Salon textuel: 🐍-ticket-{user.name} | Vocal: Recrutement | {user.name}")
+
+        file_path = await save_channel_to_json(channel)
+
+        guild_staff = interaction.client.get_guild(int(GUILD_STAFF_SERVER_ID))
+        log_channel = guild_staff.get_channel(int(TICKETS_LOG_CHANNEL_ID))
+
+        if log_channel and file_path:
+            file_to_send = nextcord.File(file_path)
+            await log_channel.send(
+                content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {ticket.user_name}\n"
+                        f"Canal: {channel.name}",
+                file=file_to_send
+            )
+
+            print(f"[Tickets Views]   Archivage automatique du ticket!")
+
+        if channel:
+            await channel.delete()
+
+        if voice_channel:
+            await voice_channel.delete()
+
+        self.db.supress_ticket(ticket)
+
+class NoButton(nextcord.ui.Button):
+
+    def __init__(self, db: TicketsDB):
+        super().__init__(label="Non", style=nextcord.ButtonStyle.red, custom_id="no_ticket_button")
+        self.db = db
+
+    async def callback(self, interaction: nextcord.Interaction):
+        view = self.view
+        guild = interaction.guild
+        user = interaction.user
+
+        ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
+        if ticket is None:
+            print(
+                f"[Tickets Views]   Erreur lors de la confirmation de fermeture du ticket | Par l'utilisateur {user.name} | "
+                f"Ticket retourne None")
+            await interaction.response.send_message(
+                "❌ Erreur lors de la confirmation de fermeture du ticket, le Ticket n'existe pas dans la base de données",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(ticket.channel_id)
+
+        for item in view.children:
+            item.disabled = True
+
+        ticket.step = 2
+
+        self.db.update_ticket(ticket)
+
+        view.update_components(interaction)
+
+        print(f"[Tickets Views]   Annulation de la fermeture du ticket => Par l'utilisateur: {user.name}"
+              f" | Channel: {channel.name}")
+
+        await interaction.response.edit_message(
+            embeds=view.embd_response_reason(ticket),
+            view=view
+        )
