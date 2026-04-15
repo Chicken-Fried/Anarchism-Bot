@@ -27,7 +27,13 @@ load_dotenv()
 log = logging.getLogger("poller")
 
 ENV_DB_UNITS_PATH = os.getenv("DATABASE_UNITS", "data/all_units.json")
+ENV_DB_REPLAYS_PATH = os.getenv("DATABASE_REPLAYS_WRPL", "data/replays")
+ENV_USER_DATA_PATCH = os.getenv("USER_DATA", "user_data")
+
+
 DB_UNITS    = os.path.abspath(ENV_DB_UNITS_PATH)
+REPLAYS_DIR   = os.path.abspath(ENV_DB_REPLAYS_PATH)
+USER_DATA_DIR = os.path.abspath(ENV_USER_DATA_PATCH)
 
 # ── Config ────────────────────────────────────────────────────────────────
 MAX_PARTS          = 26          # 0000.wrpl → 0025.wrpl max
@@ -160,9 +166,6 @@ class WTPoller:
     Gère le polling SQB War Thunder.
     Une seule instance par bot — lancée dans on_ready, fermée à l'arrêt.
     """
-
-    USER_DATA_DIR = str(Path(__file__).parent / "user_data")
-    REPLAYS_DIR   = Path(__file__).parent / "replays"
 
     def __init__(self, db):
         self.db          = db
