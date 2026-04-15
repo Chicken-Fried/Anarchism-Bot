@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from nextcord.ext import commands
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent / ".env")
 
 #################################################################
 # INTENTS BOT

@@ -17,3 +17,4 @@ httpx
 flask
 babel
 requests
+PyNaCl
