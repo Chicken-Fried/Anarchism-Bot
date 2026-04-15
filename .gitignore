@@ -37,6 +37,8 @@ all_units.json
 fetcher_sqb_schedular.py
 renderer_log_v6.py
 welcome_roles.py
+docker-compose.yml
+Dockerfile
 
 # --- Base de données et Données locales ---
 # On ignore le contenu du dossier data, mais pas le dossier lui-même
