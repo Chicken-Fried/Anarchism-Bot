@@ -6,17 +6,24 @@ puis la session est sauvegardée dans ./user_data/ pour le bot.
 """
 import asyncio
 import os
+
+from pathlib import Path
 from playwright.async_api import async_playwright
+
+from dotenv import load_dotenv
+load_dotenv()
+
+USER_DATA_PATH = os.getenv("USER_DATA", "user_data")
+USER_DATA = os.path.abspath(USER_DATA_PATH)
 
 
 async def setup():
-    user_data_dir = os.path.join(os.getcwd(), "user_data")
-    os.makedirs(user_data_dir, exist_ok=True)
+    os.makedirs(USER_DATA, exist_ok=True)
 
     async with async_playwright() as p:
         print("Lancement du navigateur...")
         context = await p.chromium.launch_persistent_context(
-            user_data_dir,
+            USER_DATA,
             headless=False,
             args=["--disable-blink-features=AutomationControlled"],
             viewport={"width": 1280, "height": 720},
