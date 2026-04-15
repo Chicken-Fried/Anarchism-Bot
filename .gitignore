@@ -42,7 +42,7 @@ images/*
 !images/.gitkeep
 
 wrpl/replays/*
-!wrpl/replays.gitkeep
+!wrpl/replays/.gitkeep
 
 wrpl/user_data/*
 !wrpl/user_data/.gitkeep
