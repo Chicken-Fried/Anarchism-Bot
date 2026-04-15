@@ -185,7 +185,7 @@ class WTPoller:
         log.info("Démarrage Playwright...")
         self._playwright = await async_playwright().start()
         self._context = await self._playwright.chromium.launch_persistent_context(
-            self.USER_DATA_DIR,
+            USER_DATA_DIR,
             headless=True,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...",
             args=[
@@ -323,7 +323,7 @@ class WTPoller:
         log.info("Nouveau SQB : %s — %s", session_hex, item.get("title", ""))
 
         # Téléchargement via httpx async (ne bloque pas asyncio)
-        dest = self.REPLAYS_DIR / session_hex
+        dest = Path(f"{REPLAYS_DIR}/{session_hex}")
         wrpl_files = await download_wrpl_files(
             base_url, session_hex, dest,
             self._user_agent, self._cookies,
