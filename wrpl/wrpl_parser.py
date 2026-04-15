@@ -38,7 +38,7 @@ from typing import Any, Optional, Tuple
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-from models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, PlayerFromSlot, MpiSignature, ChatMessage,
+from wrpl.models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, PlayerFromSlot, MpiSignature, ChatMessage,
                                 KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, VehiclesReplays, Player,
                                 ReplayData, VehicleInfo)
 
