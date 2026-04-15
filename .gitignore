@@ -4,13 +4,6 @@
 
 # --- DONNÉES LOCALES (Sera sur le laptop, pas sur GitHub) ---
 # On ignore les bases de données et les fichiers de travail du bot
-data/
-database/
-logs/
-images/logo/
-images/maps/
-images/vehicles/
-core/
 
 # --- Python ---
 __pycache__/
@@ -33,6 +26,7 @@ data/*
 
 replays/*
 !replays/.gitkeep
+
 *.log
 
 logs/*
