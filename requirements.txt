@@ -16,3 +16,4 @@ typing-extensions
 httpx
 flask
 babel
+requests
