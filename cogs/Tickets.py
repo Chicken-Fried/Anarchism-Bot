@@ -51,7 +51,6 @@ class Tickets(commands.Cog):
     )
     async def create_channel_ticket(self, interaction: nextcord.Interaction):
         guild = interaction.guild
-        user = interaction.user
         view = OpenTicketsView(db=self.db)
 
         results = self.db.get_ch_ticket(guild.id, get_all=True)
