@@ -33,7 +33,7 @@ import math
 import sys
 import re
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from typing import Any, Optional, Tuple
 from pathlib import Path
 from playwright.sync_api import sync_playwright
