@@ -28,15 +28,11 @@ import zlib
 import io
 import json
 import argparse
-import math
-import traceback
 import difflib
 import math
 import sys
-import os
 import re
 import urllib.request
-import cloudscraper
 from dataclasses import dataclass, field, asdict
 from typing import Any, Optional, Tuple
 from pathlib import Path

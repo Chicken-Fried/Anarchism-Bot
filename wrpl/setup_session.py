@@ -7,7 +7,6 @@ puis la session est sauvegardée dans ./user_data/ pour le bot.
 import asyncio
 import os
 
-from pathlib import Path
 from playwright.async_api import async_playwright
 
 from dotenv import load_dotenv

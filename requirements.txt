@@ -18,3 +18,7 @@ flask
 babel
 requests
 PyNaCl
+typing
+httpx
+datetime
+argparse

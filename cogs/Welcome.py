@@ -1,12 +1,7 @@
 import nextcord
 import os
 import io
-import datetime
 import aiohttp
-
-from datetime import datetime
-
-from nextcord import member
 
 from images.welcome.welcome_image import generate_welcome_image
 from utils.welcome_roles import save_roles_list_to_json, open_roles_list_json, RoleWelcome

@@ -1,5 +1,4 @@
 import nextcord
-from unicodedata import category
 
 
 class CategorySelect(nextcord.ui.ChannelSelect):

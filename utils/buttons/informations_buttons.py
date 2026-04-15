@@ -1,5 +1,4 @@
 import nextcord
-from nextcord import PermissionOverwrite
 
 
 class OpenTicket(nextcord.ui.Button):

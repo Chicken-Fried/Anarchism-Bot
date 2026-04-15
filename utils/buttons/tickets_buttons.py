@@ -2,13 +2,10 @@ import os
 import nextcord
 import asyncio
 from nextcord import PermissionOverwrite
-from nextcord.ui.select import channel
-from unicodedata import category
 
 from database.db_tickets import TicketsDB
 from utils.tickets_log import save_channel_to_json
 from utils.inputs.tickets_inputs import AbsentModal
-from database.db_informations import InformationDB
 from database.models.tickets_class import Ticket, TicketGuilds, TicketViewChannels
 
 from dotenv import load_dotenv
