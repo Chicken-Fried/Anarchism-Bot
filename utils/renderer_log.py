@@ -27,7 +27,7 @@ load_dotenv()
 
 # ── Chemins et Configuration Globale ──────────────────────────────────────
 BASE_DIR = Path(__file__).parent
-DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS")
+DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS", "images/maps")
 
 IMAGE_DIR = os.path.abspath(DB_IMAGES_MAPS)
 

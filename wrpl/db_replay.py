@@ -31,8 +31,8 @@ load_dotenv()
 
 log = logging.getLogger("replay_db")
 
-ENV_DB_PATH = os.getenv("DATABASE_REPLAY")
-ENV_REPLAYS_PATH = os.getenv("REPLAYS_PATH")
+ENV_DB_PATH = os.getenv("DATABASE_REPLAY", "data/sqb_data.db")
+ENV_REPLAYS_PATH = os.getenv("DATABASE_REPLAYS_WRPL", "data/replays")
 #PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 #_db_path = os.getenv("DATABASE_REPLAY")
