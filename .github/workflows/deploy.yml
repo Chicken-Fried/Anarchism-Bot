@@ -14,7 +14,7 @@ jobs:
         with:
           host: ${{ secrets.GIT_PROJECTS }}
           username: ${{ secrets.edgar }}
-          key: ${{ secrets.SSH_KEY }}
+          key: ${{ secrets.hsjshdjzdzzizhfeufhehfduefhjzzeé2332322342ESDFEZED4232323 }}
           port: 3434
           script: |
             cd /home/edgar/docker-projects/bot-anarchism
