@@ -49,6 +49,9 @@ database/*
 images/*
 !images/.gitkeep
 
+!wrpl/replays.gitkeep
+!wrpl/user_data/.gitkeep
+
 
 # Si tu as un fichier sqlite spécifique à la racine
 *.sqlite
