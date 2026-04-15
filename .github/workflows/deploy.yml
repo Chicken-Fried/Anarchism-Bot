@@ -13,8 +13,9 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
+          username: ${{ secrets.GIT_PROJECTS }}
           key: ${{ secrets.SSH_KEY }}
+          port: 3434
           script: |
             cd /home/edgar/docker-projects/bot-anarchism
             git fetch origin master
