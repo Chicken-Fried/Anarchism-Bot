@@ -7,8 +7,6 @@
 data/
 database/
 logs/
-wrpl/replays/
-wrpl/user_data/
 images/logo/
 images/maps/
 images/vehicles/
@@ -49,7 +47,10 @@ database/*
 images/*
 !images/.gitkeep
 
+wrpl/replays/*
 !wrpl/replays.gitkeep
+
+wrpl/user_data/*
 !wrpl/user_data/.gitkeep
 
 
