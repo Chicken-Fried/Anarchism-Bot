@@ -78,6 +78,6 @@ async def on_disconnect():
 
 if __name__ == '__main__':
     for filename in os.listdir(COGS):
-        if filename.endswith('.py'):
+        if filename.endswith('.py') and not filename.startswith('_'):
             bot.load_extension(f'{COGS}.{filename[:-3]}')
     bot.run(TOKEN)
