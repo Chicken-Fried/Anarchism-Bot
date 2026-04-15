@@ -12,8 +12,8 @@ jobs:
       - name: Connexion SSH et déploiement
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.GIT_PROJECTS }}
+          host: ${{ secrets.GIT_PROJECTS }}
+          username: ${{ secrets.edgar }}
           key: ${{ secrets.SSH_KEY }}
           port: 3434
           script: |
