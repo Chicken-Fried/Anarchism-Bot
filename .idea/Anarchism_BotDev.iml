@@ -15,6 +15,7 @@
       <excludeFolder url="file://$MODULE_DIR$/logs" />
       <excludeFolder url="file://$MODULE_DIR$/wrpl/replays" />
       <excludeFolder url="file://$MODULE_DIR$/wrpl/user_data" />
+      <excludeFolder url="file://$MODULE_DIR$/user_data" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (Anarchism_BotDev)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -14,6 +14,7 @@ __pycache__/
 env/
 venv/
 .venv/
+user_data/
 pip-log.txt
 pip-delete-this-directory.txt
 docker-compose.yml
@@ -26,6 +27,9 @@ data/*
 
 replays/*
 !replays/.gitkeep
+
+user_data/*
+!user_data/.gitkeep
 
 *.log
 
