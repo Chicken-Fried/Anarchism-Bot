@@ -27,10 +27,14 @@ import argparse
 import json
 import sys
 import re
+import os
 import time
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv()
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -60,8 +64,11 @@ TYPE_MAPPING = {
 
 BOAT_KEYWORDS = frozenset(["boat", "ship"])
 
-DEFAULT_OUTPUT    = Path(__file__).parent.parent / "wrpl" / "all_units.json"
-IMAGES_DIR        = Path(__file__).parent.parent / "images" / "vehicles"
+ENV_DB_PATH = os.getenv("DATABASE_UNITS")
+ENV_IMAGES_VEHICLES = os.getenv("DATABASE_IMAGES_VEHICLES")
+
+DEFAULT_OUTPUT    = os.path.abspath(ENV_DB_PATH)
+IMAGES_DIR        = os.path.abspath(ENV_IMAGES_VEHICLES)
 
 
 # ── Helpers réseau ────────────────────────────────────────────────────────────

@@ -17,16 +17,19 @@ USAGE CORRIGÉ v3.0:
 import io
 import random
 import re
+import os
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from dotenv import load_dotenv
+load_dotenv()
 
 # ── Chemins et Configuration Globale ──────────────────────────────────────
 BASE_DIR = Path(__file__).parent
-ROOT_DIR_ = Path(__file__).parent.parent
+DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS")
 
-IMAGE_DIR = str(ROOT_DIR_ / "images" / "maps")
+IMAGE_DIR = os.path.abspath(DB_IMAGES_MAPS)
 
 # ── Types de Véhicules (SQB) ───────────────────────────────────────────────
 TYPE_COLORS: Dict[str, Tuple[int, int, int]] = {
@@ -455,7 +458,6 @@ if __name__ == "__main__":
         ],
     }
 
-    print(f"PATH: {BASE_DIR}")
     data = render_scoreboard(test_session, maps_dir=IMAGE_DIR)
 
     out_path = Path("scoreboard_test.jpg")

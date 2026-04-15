@@ -31,12 +31,13 @@ load_dotenv()
 
 log = logging.getLogger("replay_db")
 
-ENV_DB_PATH = Path(os.getenv("DATABASE_REPLAY"))
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_DB_PATH = os.getenv("DATABASE_REPLAY")
+ENV_REPLAYS_PATH = os.getenv("REPLAYS_PATH")
+#PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 #_db_path = os.getenv("DATABASE_REPLAY")
-DB_PATH = (PROJECT_ROOT / ENV_DB_PATH).resolve()
-REPLAYS_PATH = (PROJECT_ROOT / "wrpl" / "replays").resolve()
+DB_PATH = os.path.abspath(ENV_DB_PATH)
+REPLAYS_PATH = os.path.abspath(ENV_REPLAYS_PATH)
 
 # ── Chargement all_units.json (singleton) ────────────────────────────────
 _units_cache: dict = {}
