@@ -16,12 +16,18 @@ import asyncio
 import json
 import logging
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
+load_dotenv()
 
 log = logging.getLogger("poller")
+
+ENV_DB_UNITS_PATH = os.getenv("DATABASE_UNITS", "data/all_units.json")
+DB_UNITS    = os.path.abspath(ENV_DB_UNITS_PATH)
 
 # ── Config ────────────────────────────────────────────────────────────────
 MAX_PARTS          = 26          # 0000.wrpl → 0025.wrpl max
@@ -346,8 +352,8 @@ class WTPoller:
             return False
 
         # Enrich (all_units.json)
-        all_units = Path(__file__).parent.parent / "all_units.json"
-        if all_units.exists():
+        all_units = DB_UNITS
+        if all_units:
             try:
                 vdb = await asyncio.to_thread(wp.load_vehicle_db, False)
                 if vdb:
