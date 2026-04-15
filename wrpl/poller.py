@@ -339,7 +339,7 @@ class WTPoller:
                  len(wrpl_files), session_hex, total_size // 1024)
 
         # Parse (dans un thread pour ne pas bloquer asyncio)
-        sys.path.insert(0, str(Path(__file__).parent.parent))
+        sys.path.insert(0, str(Path(__file__).parent))
         try:
             import wrpl_parser as wp
         except ImportError:
