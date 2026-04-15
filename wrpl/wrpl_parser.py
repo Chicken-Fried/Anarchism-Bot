@@ -33,10 +33,14 @@ import math
 import sys
 import re
 import urllib.request
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Any, Optional, Tuple
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+
+from models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, PlayerFromSlot, MpiSignature, ChatMessage,
+                                KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, VehiclesReplays, Player,
+                                ReplayData, VehicleInfo)
 
 
 # =============================================================================
@@ -82,7 +86,7 @@ def _get_json(url: str, timeout: int = 30) -> dict | list:
         return json.loads(resp.read())
 
 
-@dataclass
+"""@dataclass
 class WRPLHeader:
     magic:              bytes
     version:            int
@@ -108,7 +112,7 @@ class WRPLHeader:
 
     @property
     def session_hex(self) -> str:
-        return f"{self.session_id:016x}"
+        return f"{self.session_id:016x}"""
 
 
 def _cstr(b: bytes) -> str:
@@ -180,7 +184,7 @@ def read_vlsize(stream) -> Optional[int]:
 # 3. LECTURE DU FLUX DE PAQUETS (PacketStreamReader — packetReader.go)
 # =============================================================================
 
-@dataclass
+"""@dataclass
 class RawPacket:
     seq:          int
     current_time: int    # ms depuis le début de la partie
@@ -199,7 +203,7 @@ class RawPacket:
 
     @property
     def time_s(self) -> float:
-        return self.current_time / 1000.0
+        return self.current_time / 1000.0"""
 
 
 def read_packets(stream):
@@ -471,9 +475,9 @@ def parse_blk(data: bytes, _debug: bool = False) -> Optional[dict]:
 # 6. EXTRACTION DES JOUEURS DEPUIS LE SETTINGS BLK
 # =============================================================================
 
-@dataclass
+"""@dataclass
 class PlayerFromSettings:
-    """Données statiques présentes dès le header du replay."""
+    #Données statiques présentes dès le header du replay.
     slot:         int            # index dans mplace (0-based)
     name:         str
     clan_tag:     str
@@ -482,7 +486,7 @@ class PlayerFromSettings:
     vehicle:      str            # shortname du véhicule principal
     country:      str            # nation (usa, ussr, germany, …)
     rank:         int
-    exp:          int
+    exp:          int"""
 
 
 def _get_str(d, *keys) -> str:
@@ -651,15 +655,15 @@ SLOT_SIGS = [
 ]
 
 
-@dataclass
+"""@dataclass
 class PlayerFromSlot:
-    """Données dynamiques extraites des paquets Slot durant la partie."""
+    #Données dynamiques extraites des paquets Slot durant la partie.
     slot:     int           # index 0-255
     time_ms:  int
     user_id:  int
     name:     str
     clan_tag: str
-    title:    str
+    title:    str"""
 
 
 def _parse_slot_player_init(slot: int, time_ms: int, msg: bytes) -> Optional['PlayerFromSlot']:
@@ -867,12 +871,12 @@ _KNOWN_MPI_SIGS: set[bytes] = {
     bytes([0x02, 0x58, 0x22, 0xf0]),  # Compressed blobs
 }
 
-@dataclass
+"""@dataclass
 class MpiSignature:
     sig:       bytes     # 4 premiers octets
     count:     int       # nombre d'occurrences
     sizes:     list      # tailles des payloads observées (dédupliqué)
-    examples:  list      # jusqu'à 5 exemples : (time_ms, payload[:48])
+    examples:  list      # jusqu'à 5 exemples : (time_ms, payload[:48])"""
 
 
 def scan_mpi_signatures(paths: list[str], max_examples: int = 5) -> dict[bytes, MpiSignature]:
@@ -956,14 +960,14 @@ def print_mpi_scan(results: dict[bytes, MpiSignature], top: int = 30) -> None:
 
 # --- Chat Message (type 4) ---
 
-@dataclass
+"""@dataclass
 class ChatMessage:
     seq:          int
     time_ms:      int
     sender:       str
     content:      str
     channel_type: int
-    is_enemy:     int
+    is_enemy:     int"""
 
 
 def parse_chat(pk: RawPacket) -> Optional[ChatMessage]:
@@ -982,7 +986,7 @@ def parse_chat(pk: RawPacket) -> Optional[ChatMessage]:
 KILL_SIG = bytes([0x02, 0x58, 0x58, 0xf0])
 
 
-@dataclass
+"""@dataclass
 class KillEntry:
     seq:             int
     time_ms:         int
@@ -991,7 +995,7 @@ class KillEntry:
     killer_vehicle:  str
     victim_slot:     int   # -1 si non déterminé
     victim_vehicle:  str
-    remainder_hex:   str
+    remainder_hex:   str"""
 
 
 def parse_kill(pk: RawPacket) -> Optional[KillEntry]:
@@ -1029,13 +1033,13 @@ def parse_kill(pk: RawPacket) -> Optional[KillEntry]:
 AWARD_SIG = bytes([0x02, 0x58, 0x78, 0xf0])
 
 
-@dataclass
+"""@dataclass
 class Award:
     seq:        int
     time_ms:    int
     award_type: int
     player_slot: int
-    award_name: str
+    award_name: str"""
 
 
 def parse_award(pk: RawPacket) -> Optional[Award]:
@@ -1069,14 +1073,14 @@ def _update_win_team(stats: list['PlayerStats'], awards: list[Award]) -> list['P
 MOVEMENT_CONDITIONS = {0: 0xff, 1: 0x0f, 5: 0xa3, 6: 0xf0, 10: 0x00, 11: 0x00, 13: 0x14}
 
 
-@dataclass
+"""@dataclass
 class EntityMovement:
     seq:     int
     time_ms: int
     eid:     int
     x:       float
     y:       float
-    z:       float
+    z:       float"""
 
 
 def _matches(payload: bytes, cond: dict) -> bool:
@@ -1106,7 +1110,7 @@ def parse_movement(pk: RawPacket) -> Optional[EntityMovement]:
 
 # --- Player Vehicle Verification (type 6) ---
 
-@dataclass
+"""@dataclass
 class PlayerVehicle:
     seq:               int
     slot:              int
@@ -1115,7 +1119,7 @@ class PlayerVehicle:
     country:           str | None = None
     vehicle_type:      str | None = None
     vehicle_br:        int | None = None
-    image_path:        str | None = None
+    image_path:        str | None = None"""
 
 IDX_PLAYERS_NUM = [b'01_', b'O1_', b'02_', b'O2_', b'03_', b'O3_', b'04_', b'O4_', b'05_', b'O5_', b'06_', b'O6_',
                    b'07_', b'O7_', b'08_', b'O8_', b'09_', b'O9_', b'10_', b'11_', b'12_', b'13_', b'14_', b'15_',
@@ -1772,9 +1776,9 @@ def _parse_from_raw_vehicles(
 # 9. EXTRACTION DES STATS DU RESULTS BLK
 # =============================================================================
 
-@dataclass
+"""@dataclass
 class PlayerStats:
-    """Stats de fin de partie pour un joueur, extraites du Results BLK."""
+    #Stats de fin de partie pour un joueur, extraites du Results BLK.
     slot:            int
     name:            str
     user_id:         int
@@ -1794,7 +1798,7 @@ class PlayerStats:
 
 @dataclass
 class VehiclesReplays:
-    vehicles: list
+    vehicles: list"""
 
 
 def extract_vehicle_map_from_results(results: dict) -> dict[int, str]:
@@ -2001,9 +2005,9 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
 # 10. FUSION — TABLE JOUEURS COMPLÈTE
 # =============================================================================
 
-@dataclass
+"""@dataclass
 class Player:
-    """Vue unifiée d'un joueur, toutes sources confondues."""
+    #Vue unifiée d'un joueur, toutes sources confondues
     slot:         int
     name:         str
     clan_tag:     str
@@ -2036,7 +2040,7 @@ class Player:
     # Kills commis durant la partie
     kills_recorded: list = field(default_factory=list, repr=False)
     # Awards reçus
-    awards:         list = field(default_factory=list, repr=False)
+    awards:         list = field(default_factory=list, repr=False)"""
 
 
 def build_player_table(
@@ -2246,7 +2250,7 @@ def build_player_table(
 # 11. STRUCTURES DE RÉSULTAT GLOBAL
 # =============================================================================
 
-@dataclass
+"""@dataclass
 class ReplayData:
     header:               WRPLHeader
     settings_raw:         Optional[dict]
@@ -2257,7 +2261,7 @@ class ReplayData:
     movements:            list = field(default_factory=list)
     awards:               list = field(default_factory=list)
     packet_count:         int  = 0
-    unknown_slot_msgs:    list = field(default_factory=list)  # messages slot non-parsés
+    unknown_slot_msgs:    list = field(default_factory=list)  # messages slot non-parsés"""
 
 
 # =============================================================================
@@ -3143,9 +3147,9 @@ def print_summary(replay: ReplayData):
 
 _VEHICLE_DB_CACHE_DEFAULT = Path(__file__).parent / "all_units.json"
 
-@dataclass
+"""@dataclass
 class VehicleInfo:
-    """Métadonnées d'un véhicule WT issues du all_units.json (all_units.py)."""
+    #Métadonnées d'un véhicule WT issues du all_units.json (all_units.py).
     id:               str
     display_name:     str    # Nom affiché en jeu (ex: "Pz.Kpfw. Panther II")
     country:          str    # Nation WT (ex: "germany", "ussr", "usa"…)
@@ -3156,7 +3160,7 @@ class VehicleInfo:
 
     @classmethod
     def from_dict(cls, d: dict) -> 'VehicleInfo':
-        """Construit depuis un dict all_units.json (clés variables selon la source)."""
+        #Construit depuis un dict all_units.json (clés variables selon la source).
         return cls(
             id               = d.get('unit_full_name') or d.get('id', ''),
             display_name     = d.get('full_name')      or d.get('display_name', ''),
@@ -3166,7 +3170,7 @@ class VehicleInfo:
             br               = float(d.get('realistic_ground_br') or d.get('br') or 0),
             image_path       = d.get('image_path')
         )
-
+"""
 
 # Mapping préfixe ID → nation WT
 _COUNTRY_PREFIXES: list[tuple[str, str]] = [

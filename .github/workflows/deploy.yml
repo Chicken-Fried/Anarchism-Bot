@@ -3,7 +3,7 @@ name: Deploy Bot to Debian
 on:
   push:
     branches:
-      - master  # Se déclenche à chaque push sur la branche master
+      - master 
 
 jobs:
   deploy:
