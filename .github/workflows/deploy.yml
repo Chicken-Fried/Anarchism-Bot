@@ -12,10 +12,10 @@ jobs:
       - name: Connexion SSH et déploiement
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GIT_PROJECTS }}
+          host: ${{ secrets.109.136.176.42 }}
           username: ${{ secrets.edgar }}
-          key: ${{ secrets.hsjshdjzdzzizhfeufhehfduefhjzzeé2332322342ESDFEZED4232323 }}
-          port: 3434
+          password: ${{ secrets.Juan-pablo1 }}
+          port: ${{ secrets.3434 }}
           script: |
             cd /home/edgar/docker-projects/bot-anarchism
             git fetch origin master
