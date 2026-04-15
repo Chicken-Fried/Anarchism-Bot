@@ -1052,7 +1052,7 @@ def parse_award(pk: RawPacket) -> Optional[Award]:
     except Exception:
         return None
 
-def _update_win_team(stats: list[PlayerStats], awards: list[Award]) -> list[PlayerStats]:
+def _update_win_team(stats: list, awards: list) -> list:
 
     for award in awards:
         if award.award_name == 'hidden_win_streak':
