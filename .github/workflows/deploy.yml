@@ -1,0 +1,23 @@
+name: Deploy Bot to Debian
+
+on:
+  push:
+    branches:
+      - master  # Se déclenche à chaque push sur la branche master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connexion SSH et déploiement
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/edgar/docker-projects/bot-anarchism
+            git fetch origin master
+            git reset --hard origin/master
+            docker compose up --build -d
+            docker image prune -f
