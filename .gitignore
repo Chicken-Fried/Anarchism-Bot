@@ -1,6 +1,8 @@
 # --- SÉCURITÉ ---
 # Ne jamais envoyer le token ou les secrets
 .env
+*.sqlite
+*.db
 
 # --- DONNÉES LOCALES (Sera sur le laptop, pas sur GitHub) ---
 # On ignore les bases de données et les fichiers de travail du bot
@@ -17,8 +19,6 @@ venv/
 user_data/
 pip-log.txt
 pip-delete-this-directory.txt
-docker-compose.yml
-Dockerfile
 
 # --- Base de données et Données locales ---
 # On ignore le contenu du dossier data, mais pas le dossier lui-même
@@ -45,20 +45,10 @@ database/*
 images/*
 !images/.gitkeep
 
-wrpl/replays/*
-!wrpl/replays/.gitkeep
 
-wrpl/user_data/*
-!wrpl/user_data/.gitkeep
-
-
-# Si tu as un fichier sqlite spécifique à la racine
-*.sqlite
-*.db
-
-# --- Docker ---
+# --- DOCKER & OS ---
 .dockerignore
-
-# --- OS spécifiques ---
+Dockerfile
+docker-compose.yml
 .DS_Store
 Thumbs.db
