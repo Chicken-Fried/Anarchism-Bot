@@ -341,6 +341,11 @@ class WTPoller:
         # Parse (dans un thread pour ne pas bloquer asyncio)
         #sys.path.insert(0, str(Path(__file__).parent))
 
+        log.info("  Type des replays %s", type(wrpl_files))
+
+        for file in wrpl_files:
+            log.info("  Replay %s", file)
+            log.info("  Type du nom du replay %s", type(file))
         try:
             replay_data = await asyncio.to_thread(
                 wp.parse_replay_files, wrpl_files, False
@@ -360,25 +365,6 @@ class WTPoller:
                     )
             except Exception as exc:
                 log.debug("Enrich non critique : %s", exc)
-
-        """# Online (thunder.nanachi.party)
-        try:
-            with open(all_units) as f:
-                vdb_raw = json.load(f)
-            online = await asyncio.to_thread(
-                wp.fetch_session_vehicles,
-                replay_data.header.session_id,
-                vdb_raw,
-                False,
-            )
-            if online:
-                for p in replay_data.players.values():
-                    if p.user_id and p.user_id in online:
-                        first = next((v for v in online[p.user_id] if v), "")
-                        if first:
-                            p.vehicle = first
-        except Exception as exc:
-            log.debug("Online fetch non critique : %s", exc)"""
 
         # Stockage SQLite
         slot = get_session_slot(datetime.now(timezone.utc))
