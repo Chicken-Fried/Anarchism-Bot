@@ -32,6 +32,7 @@ import difflib
 import math
 import sys
 import re
+import os
 import urllib.request
 from dataclasses import asdict
 from typing import Any, Optional, Tuple
@@ -42,6 +43,11 @@ from wrpl.models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, 
                                 KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, VehiclesReplays, Player,
                                 ReplayData, VehicleInfo)
 
+from dotenv import load_dotenv
+load_dotenv()
+
+ENV_DB_UNITS_PATH = os.getenv("DATABASE_UNITS", "data/all_units.json")
+_VEHICLE_DB_CACHE_DEFAULT = os.path.abspath(ENV_DB_UNITS_PATH)
 
 # =============================================================================
 # 1. HEADER BINAIRE (1226 octets fixes)
@@ -3144,8 +3150,6 @@ def print_summary(replay: ReplayData):
 # =============================================================================
 # 16. BASE DE DONNÉES VÉHICULES — 2 API EXTERNES
 # =============================================================================
-
-_VEHICLE_DB_CACHE_DEFAULT = Path(__file__).parent / "all_units.json"
 
 """@dataclass
 class VehicleInfo:
