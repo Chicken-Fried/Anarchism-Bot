@@ -10,8 +10,8 @@ jobs:
       - name: Tester la connexion et le dossier
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
+          host: ${{ env.HOST }}
+          username: ${{ env.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
             echo "--- Début du test ---"
