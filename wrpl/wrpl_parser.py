@@ -3277,7 +3277,7 @@ def load_vehicle_db(force_refresh: bool = False,
 
     Retourne dict {vehicle_id: VehicleInfo}.
     """
-    cache = _VEHICLE_DB_CACHE_DEFAULT
+    cache = Path(_VEHICLE_DB_CACHE_DEFAULT)
 
     if not cache.exists():
         print("[Load database vehicles] - CACHE INEXISTANT")
