@@ -10,9 +10,9 @@ jobs:
       - name: Tester la connexion et le dossier
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.HOST }}
-          username: ${{ env.USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.DEBIAN_HOST }}
+          username: ${{ secrets.DEBIAN_USER }}
+          key: ${{ secrets.GIT_PROJECTS }}
           script: |
             echo "--- Début du test ---"
             echo "Utilisateur actuel : $(whoami)"

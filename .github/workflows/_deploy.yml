@@ -12,9 +12,9 @@ jobs:
       - name: Connexion SSH et déploiement
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.DEBIAN_HOST }}
+          username: ${{ secrets.DEBIAN_USER }}
+          key: ${{ secrets.GIT_PROJECTS }}
           script: |
             mkdir -p /home/edgar/docker-projects/bot-anarchism
             cd /home/edgar/docker-projects/bot-anarchism
