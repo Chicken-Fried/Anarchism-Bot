@@ -58,21 +58,21 @@ SQB_PAYLOAD = {
 # ── Créneaux SQB UTC ──────────────────────────────────────────────────────
 def get_session_slot(dt: datetime) -> str | None:
     h = dt.hour
-    if 1 <= h < 10:   return "morning"
+    if 1 <= h < 9:   return "morning"
     if 14 <= h < 23: return "evening"
     return None
 
 def get_session_window_start(dt: datetime) -> float | None:
     """
     Retourne le timestamp UTC du début du créneau SQB actuel.
-    Matin  : 01h00 UTC  |  Soir : 15h00 UTC
+    Matin  : 00h00 UTC  |  Soir : 14h00 UTC
     Permet de filtrer les replays : on ne traite que ceux
     dont startTime >= début du créneau actuel.
     """
     h = dt.hour
-    if 0 <= h < 8:
+    if 0 <= h < 9: #0 <= h < 9
         return dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-    if 14 <= h < 23:
+    if 14 <= h < 23: #14 <= h < 23
         return dt.replace(hour=14, minute=0, second=0, microsecond=0).timestamp()
     return None
 
@@ -291,6 +291,8 @@ class WTPoller:
         if not base_url:
             return False
 
+        print(f"ITEM PROCESS ITEM: {item}")
+        print(f"ID_ITEM:  {item.get('id')}")
         # session_hex depuis sessionIdHex ou converti depuis sessionId
         session_hex = item.get("sessionIdHex") or item.get("id")
         if not session_hex:
@@ -353,20 +355,9 @@ class WTPoller:
             )
         except Exception as exc:
             log.error("parse_replay_files %s : %s", session_hex, exc)
+            log.exception("Erreur critique lors du parsing pour la session %s", session_hex)
             traceback.print_exc()
             return False
-
-        # Enrich (all_units.json)
-        all_units = DB_UNITS
-        if all_units:
-            try:
-                vdb = await asyncio.to_thread(wp.load_vehicle_db, False)
-                if vdb:
-                    await asyncio.to_thread(
-                        wp.enrich_vehicles_from_db, replay_data.players, vdb, False
-                    )
-            except Exception as exc:
-                log.debug("Enrich non critique : %s", exc)
 
         # Stockage SQLite
         slot = get_session_slot(datetime.now(timezone.utc))
@@ -415,7 +406,8 @@ class WTPoller:
                 item_start = item.get("startTime", 0)
                 print(f"TIMESTAMPS {window_start} - {item_start}")
                 if window_start and item_start and item_start < window_start:
-                    log.debug("SQB %s hors créneau → arrêt pagination", sid)
+                    log.debug("SQB %s hors créneau (startTime=%s < window=%s) → arrêt pagination",
+                              sid, window_start, item_start)
                     page_stopped_by_streak = True  # On sort de la boucle for
                     break
 
@@ -440,7 +432,7 @@ class WTPoller:
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     raise
                 except Exception as exc:
-                    log.error("_process_item %s : %s", sid, exc)
+                    log.exception("_process_item %s : %s", sid, exc)
 
             # --- Logique de sortie de la boucle WHILE ---
 

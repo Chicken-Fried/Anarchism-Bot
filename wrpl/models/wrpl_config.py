@@ -149,10 +149,6 @@ class PlayerStats:
     raw:             dict = field(default_factory=dict, repr=False)
 
 @dataclass
-class VehiclesReplays:
-    vehicles: list
-
-@dataclass
 class Player:
     """Vue unifiée d'un joueur, toutes sources confondues."""
     slot:         int
@@ -214,10 +210,10 @@ class VehicleInfo:
     image_path:       str = ''   # Path de l'image de chaque véhicule
 
     @classmethod
-    def from_dict(cls, d: dict) -> 'VehicleInfo':
+    def from_dict(cls, d: dict) -> VehicleInfo:
         """Construit depuis un dict all_units.json (clés variables selon la source)."""
         return cls(
-            id               = d.get('unit_full_name') or d.get('id', ''),
+            id               = d.get('unit_full_name') or "",
             display_name     = d.get('full_name')      or d.get('display_name', ''),
             country          = d.get('country', ''),
             vehicle_type     = d.get('vehicle_type', ''),

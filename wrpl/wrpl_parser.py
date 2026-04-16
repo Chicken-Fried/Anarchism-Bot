@@ -33,6 +33,7 @@ import math
 import sys
 import re
 import os
+import traceback
 import urllib.request
 from dataclasses import asdict
 from typing import Any, Optional, Tuple
@@ -40,7 +41,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from wrpl.models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, PlayerFromSlot, MpiSignature, ChatMessage,
-                                KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, VehiclesReplays, Player,
+                                KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, Player,
                                 ReplayData, VehicleInfo)
 
 from dotenv import load_dotenv
@@ -1312,26 +1313,6 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
     rt1_ soit None si index inférieur à 0
     '''
 
-    '''
-    TODO: Ajouter une vérification par rapport aux BR de la saison, pour ajouter un paramètre de vérification, 
-    ça enlevera des erreurs possibles => exemple si 
-    CLEAN NAME:      tiger
-    CLEAN NAME:      germ_sturmmorser
-    
-    PlayerVehicle(seq=1279, slot=0, vehicle_id='tiger_uht', vehicle_name='EC-665 Tiger UHT', country='germany', 
-    vehicle_type='H', vehicle_br=12.7, image_path='images/vehicles/tiger_uht.png')
-    &&
-    PlayerVehicle(seq=1279, slot=0, vehicle_id='germ_sturmmorser_sturmtiger', vehicle_name='38 cm Sturmmörser', 
-    country='germany', vehicle_type='T', vehicle_br=5.7, image_path='images/vehicles/germ_sturmmorser_sturmtiger.png')
-    
-    et la partie à eut lieu au BR 7.3, donc Tiger impossible !
-    
-    +++ 
-    
-    Ajouter la liste différents véhicules dans la lineup de chaque team pour accentuer la précision. 
-    
-    il doit y etre dans PlayerFromSlot []
-    '''
     FORBIDDEN_STRINGS = {
         "camo_", "_long", "superstructure", "birch",
         "slotId", "_body", "_default"
@@ -1351,27 +1332,10 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
     matched_prefix = []
     vehicles_players = []
 
-    """indices_pattern = b'|'.join([re.escape(p) for p in IDX_PLAYERS_NUM])
-
-    # Explication du groupe de préfixe : (?:rt1|[tT]1|[tT]|)
-    # - rt1 : cherche exactement rt1
-    # - [tT]1 : cherche t1 ou T1
-    # - [tT]  : cherche t ou T tout seul
-    # - |     : ou rien du tout (vide)
-    pattern = re.compile(b'(?:rt1|[tT]1|[tT]|)(?:' + indices_pattern + b')(?:player|0|$)')
-    """
-
     # On définit uniquement ce qui est l'INDEX (le cœur du problème)
     # On cherche : une lettre optionnelle + un nombre entre 1 et 16 + un underscore
     # Le pattern ne s'occupe plus de chercher "player" ou "0", il cherche juste l'index.
     index_pattern = re.compile(b'[a-zA-Z]?(?:1[0-6]|[1-9])_0')
-
-    """for i, part in enumerate(parts):
-        match = pattern.search(part)
-        if match:
-            for prefix in IDX_PLAYERS_NUM:
-                if prefix in match.group(0):
-                    matched_prefix.append((i, prefix))"""
 
     for i, part in enumerate(parts):
         match = index_pattern.search(part)
@@ -1560,6 +1524,7 @@ def _double_check_vehicle(
                     if matched_id in check_match:
                         best_match_for_this_part = vehicle_db[matched_id]
 
+                print(f"BEST MATCH RECHECK      :{best_match_for_this_part}")
                 # Si on a trouvé un véhicule pour ce segment précis
                 if best_match_for_this_part:
                     vehicles_players.append(
@@ -1580,6 +1545,7 @@ def _double_check_vehicle(
                 possible_match = lineup_per_players.get(slot)
                 len_match = len(possible_match)
 
+                print(f"POSSSIBLE MATCH RECHECK      :{best_match_for_this_part}")
                 match len_match:
                     case 1:
                         vehicles_players.append(
@@ -2591,7 +2557,6 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     # Stats depuis Results BLK
     uncompleted_stats, possibles_vehicles_replay, lineup_per_player = extract_stats_from_results(final_results_blk or {})
 
-    # Détermination de l'ensemble des véhicules observés en jeu (via kills et matchingInfo)
     _vdb_filter = _vehicles_filter(
         vehicles=_vdb,
         names_vehicles= possibles_vehicles_replay
@@ -2610,8 +2575,10 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
         lineup_per_players=lineup_per_player
     )
 
-    print(f"VEHICLES SLOT PLAYERS            :{vehicles_players_slot}")
-    print(f"LINEUP PER PLAYERS            :{lineup_per_player}")
+    lineup_per_player = create_lineup_player(
+        database_vehicles=_vdb,
+        list_vehicles=lineup_per_player
+    )
 
     # Déduplication slot players : garde le dernier par slot
     slot_deduped: dict[int, PlayerFromSlot] = {}
@@ -2635,21 +2602,6 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
 
     vehicles_players_deduped: dict[int, PlayerVehicle] = {}
     unknown_vehicles_players: list[str] = []
-
-    """for vplyr in all_vehicles_players:
-        #print(f"vplyr={vplyr}")
-        if isinstance(vplyr, str):
-            unknown_vehicles_players.append(vplyr)
-            continue
-        existing = vehicles_players_deduped.get(vplyr.slot)
-        if existing is None or vplyr.vehicle_name != existing.vehicle_name:
-            vehicles_players_deduped[vplyr.slot] = vplyr
-
-    vehicles_players_slot = sorted({v.slot: v for v in list(vehicles_players_deduped.values())}.values(),
-                                   key=lambda v: v.slot)"""
-
-    """# On trie par la clé (le numéro de slot) et on récupère les objets
-    vehicles_players_deduped = sorted({v.slot: v for v in all_vehicles_players}.values(), key=lambda v: v.slot)"""
 
     named_in_dedup  = sum(1 for p in slot_deduped.values() if p.name and p.name.strip())
     total_in_dedup  = len(slot_deduped)
@@ -2685,6 +2637,8 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
 
     """print(f"STATS         :{stats}")
     print(f"VEHICLE MAP   :{vehicle_map}")"""
+
+
     players = build_player_table(
         settings_players=all_settings_players,
         slot_players=list(slot_deduped.values()),
@@ -2710,6 +2664,7 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     # Heuristique robuste : offset = min(victim_slots) - 0, ou on cherche le
     # décalage tel que les victim_slots - offset tombent dans [0, nb_joueurs)
 
+    print("PARSE REPLAYS FILES")
     net_offset = _compute_net_offset(players, all_kills)
     if verbose and net_offset != 0:
         print(f"  Offset réseau détecté : +{net_offset} (victim_slot - {net_offset} = slot_logique)")
@@ -2759,6 +2714,18 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
         p = players.get(a.player_slot)
         if p:
             p.awards.append({'time_ms': a.time_ms, 'name': a.award_name})
+    print(ReplayData(
+        header=ref_header,
+        settings_raw=final_settings_blk,
+        results_raw=final_results_blk,
+        players=players,
+        chats=all_chats,
+        kills=all_kills,
+        movements=all_movements,
+        awards=all_awards,
+        packet_count=all_pkt_count,
+        unknown_slot_msgs=unknown_slot_msgs,
+    ))
 
     return ReplayData(
         header=ref_header,
@@ -3186,6 +3153,41 @@ _AIR_ID_HINTS = frozenset([
     'mirage', 'mystere', 'ouragan', 'vautour',
 ])
 
+def create_lineup_player(
+        database_vehicles: dict, list_vehicles: dict[int, list[str] | str]
+) -> dict[int, VehicleInfo]:
+    """
+    Crée la lineup du joueur à partir du nom du véhicule et à partir de la base de données,
+    crée la métadonnée du véhicule et l'insère dans le dict.
+
+    :param database_vehicles:
+    :param list_vehicles:
+    :return:
+    """
+    lineup_players: dict[int, VehicleInfo] = {}
+
+    for slot in list_vehicles.keys():
+        vehicles = list_vehicles.get(slot)
+        keys_db_vehicles = database_vehicles.keys()
+
+        if isinstance(vehicles, str):
+            if vehicles in keys_db_vehicles:
+                v_from_db = database_vehicles[vehicles]
+
+                lineup_players[slot] = VehicleInfo.from_dict(v_from_db)
+
+        if isinstance(vehicles, list):
+            vehicle_from_slot = []
+            for vehicle in vehicles:
+                if vehicle in keys_db_vehicles:
+                    v_from_db = database_vehicles[vehicle]
+                    vehicle_from_slot.append(v_from_db)
+
+            if vehicle_from_slot:
+                lineup_players[slot] = vehicle_from_slot
+
+    return lineup_players
+
 
 def _country_from_id(vid: str) -> str:
     for prefix, country in _COUNTRY_PREFIXES:
@@ -3274,7 +3276,7 @@ def load_vehicle_db(force_refresh: bool = False,
         print("[Load database vehicles] - CACHE EXISTANT")
 
     # ── 1. Cache local (chemin par défaut ou explicite) ───────────────────
-    if not force_refresh and cache.exists():
+    if cache.exists():
         try:
             with open(cache, 'r', encoding='utf-8') as f:
                 raw = json.load(f)
@@ -3292,7 +3294,7 @@ def load_vehicle_db(force_refresh: bool = False,
                 print(f"  [!] Cache corrompu ({cache.name}) : {e} → retéléchargement")
 
     # ── 2. Cache absent → guide l'utilisateur ────────────────────────────
-    if not force_refresh and not cache.exists():
+    if not cache.exists():
         if verbose:
             print(f"  [!] Cache véhicules introuvable : {cache}")
             print(f"  [!] Lance d'abord : python build_vehicle_db.py")
@@ -3649,53 +3651,6 @@ def fetch_session_vehicles(
     if verbose:
         print(f"  [online] {len(result)} joueurs depuis thunder.nanachi.party")
     return result
-
-
-def extract_vehicle_map_from_results(results: dict) -> dict:
-    """
-    Extrait userId → vehicle_id depuis matchingInfo du Results BLK.
-    Utilise crafts_info.array0 (rankUnused=False = véhicule actif du lineup).
-    """
-    vehicle_map: dict = {}
-    if not results:
-        return vehicle_map
-
-    matching = results.get('matchingInfo')
-    if not isinstance(matching, dict):
-        return vehicle_map
-
-    for uid_str, info in matching.items():
-        try:
-            uid = int(uid_str)
-        except (ValueError, TypeError):
-            continue
-        if not isinstance(info, dict):
-            continue
-        crafts = info.get('crafts_info')
-        if not isinstance(crafts, dict):
-            continue
-
-        vehicle = ''
-        i = 0
-        while True:
-            craft = crafts.get(f'array{i}')
-            if craft is None:
-                break
-            if isinstance(craft, dict):
-                if str(craft.get('rankUnused', 'True')).lower() == 'false':
-                    vehicle = _get_str(craft, 'name', 'shortName', 'unitName')
-                    break
-            i += 1
-
-        if not vehicle:
-            a0 = crafts.get('array0')
-            if isinstance(a0, dict):
-                vehicle = _get_str(a0, 'name', 'shortName', 'unitName')
-
-        if uid and vehicle:
-            vehicle_map[uid] = vehicle
-
-    return vehicle_map
 
 
 def main():

@@ -187,6 +187,7 @@ class ReplayDB:
             CREATE TABLE IF NOT EXISTS lineup_player (
                 id                      INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id              INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                slot                    INTEGER,
                 name                    TEXT NOT NULL,
                 clan_tag                TEXT,
                 vehicle                 TEXT,
@@ -381,6 +382,7 @@ class ReplayDB:
                         p.activity
                     ),
                 )
+
 
                 for v in p.lineup_vehicles:
                     conn.execute(
