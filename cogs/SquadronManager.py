@@ -1,18 +1,24 @@
 import nextcord
 import logging
+import os
 
 from datetime import datetime, timezone, time
 from wrpl.all_units import build
 from pathlib import Path
 
 from wrpl.db_replay import normalize_clan_tag
+from helpers.helpers import format_duration
 
 from nextcord.ext import commands, tasks
 log = logging.getLogger(__name__)
 
+ENV_DB_PATH = os.getenv("DATABASE_UNITS", "database/all_units.json")
+UNITS_DB    = os.path.abspath(ENV_DB_PATH)
+
 class SquadronManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.units_db = UNITS_DB
         self.db = bot.db_replays
         self.daily_cleanup_db.start()
         self.daily_check_api.start()
@@ -44,7 +50,7 @@ class SquadronManager(commands.Cog):
         """
         print("[SquadronManager Cog]     Checking de l'API-Thunderskills lancée !")
         try:
-            output_path = Path(__file__).parent.parent.parent / "wrpl" / "all_units.json"
+            output_path = Path(self.units_db)
 
             print("[SquadronManager Cog]     Mise à jour de all_units.json...")
 
@@ -62,7 +68,6 @@ class SquadronManager(commands.Cog):
             print("[SquadronManager Cog]     Erreurr - Erreur lors de la mise à jour de all_units.json: %s", e)
             log.error("Erreur lors de l'exécution de daily_task : %s", e)
 
-
     @nextcord.slash_command(
         name="comp-lite",
         description="Retourne la line-up d'une team"
@@ -71,14 +76,10 @@ class SquadronManager(commands.Cog):
                                       interaction: nextcord.Interaction,
                                       squadron_tag: str = nextcord.SlashOption(
                                           name="tag_escadron",
-                                          description="Entrez le tag de l'escadron, en minuscule ou en majuscule"
+                                          description="Entrez le tag de l'escadron"
                                       )
-    ):
-        # 1. Normalisation du tag (met en majuscule et nettoie)
+                                      ):
         tag = normalize_clan_tag(squadron_tag)
-
-        # 2. Récupération des données depuis la DB
-        # On récupère les lineups pour ce clan
         lineups = self.db.get_lineups_for_clan(tag)
 
         if not lineups:
@@ -87,57 +88,57 @@ class SquadronManager(commands.Cog):
                 ephemeral=True
             )
 
-        # 3. Création de l'Embed principal
         embed = nextcord.Embed(
             title=f"Comps for {tag}",
-            description=f"Comps seen in the last 24 hours",  # Ou une autre logique de temps
-            color=0x2f3136  # Couleur sombre style Discord
+            description="Comps seen in the last 24 hours",
+            color=0x2f3136
         )
 
-        # 4. Construction des blocs de composition (un bloc par lineup trouvée)
         for i, lineup in enumerate(lineups, start=1):
-            players = lineup["players"]
+            players = lineup.get("players", [])
             if not players:
                 continue
 
-            # --- Logique de calcul du résumé (ex: 4F / 4T) ---
-            # On compte les types de véhicules présents dans cette lineup
+            # 1. Calcul du résumé (ex: 4F / 1T)
             type_counts = {}
             for p in players:
                 v_type = (p.get("vehicle_type") or "Unknown").upper()
-                # On réduit le nom du type pour l'affichage (ex: 'Fighter' -> 'F')
-                # Tu peux adapter ce mapping selon tes données
-                short_type = v_type[0] if len(v_type) > 0 else "?"
+                short_type = v_type[0] if v_type else "?"
                 type_counts[short_type] = type_counts.get(short_type, 0) + 1
 
-            # Création de la chaîne "4F / 4T"
-            summary_parts = [f"{count}{t}" for t, count in type_counts.items()]
-            summary_str = " / ".join(summary_parts)
+            summary_str = " / ".join([f"{count}{t}" for t, count in type_counts.items()])
 
-            # --- Construction du texte des joueurs ---
+            # 2. Construction de la liste des joueurs avec ALIGNEMENT
             player_lines = []
             for p in players:
                 name = p["name"]
-                v_name = p["vehicle_name"] or "Unknown Vehicle"
-                player_lines.append(f"{name} | {v_name}")
+                v_name = p["vehicle_name"] or "Unknown"
+
+                # On limite le nom à 15 caractères et on complète avec des espaces
+                # pour que le "|" soit toujours au même endroit.
+                # Ajustez le chiffre '15' selon la longueur max de vos pseudos.
+                formatted_line = f"{name[:15].ljust(15)} | {v_name}"
+                player_lines.append(formatted_line)
 
             player_list_str = "\n".join(player_lines)
 
-            # --- Calcul du temps écoulé (Last seen) ---
-            # On utilise le timestamp de la session
+            # 3. Calcul du temps écoulé (Last seen)
             try:
                 session_time = datetime.fromisoformat(lineup["timestamp"])
+                # Assurez-vous que session_time est en UTC pour la comparaison
+                if session_time.tzinfo is None:
+                    session_time = session_time.replace(tzinfo=timezone.utc)
+
                 diff = datetime.now(timezone.utc) - session_time
-                last_seen = f"{diff.seconds // 3600}h ago"  # Simplifié pour l'exemple
-                # Pour un vrai "il y a 16 heures", utilise une fonction de formatage de durée
-            except:
+                last_seen = format_duration(diff)
+            except Exception:
                 last_seen = "Unknown"
 
-            # --- Ajout au champ de l'Embed ---
+            # 4. Construction du champ (Field)
             field_value = (
                 f"**COMP {i}**\n"
                 f"**Last seen:** {last_seen}\n"
-                f"**Comp:** {summary_str}\n"
+                f"**Comp:** `{summary_str}`\n"
                 f"```\n{player_list_str}\n```"
             )
 
