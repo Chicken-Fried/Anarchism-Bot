@@ -1,0 +1,31 @@
+name: Test SSH Connection
+
+on:
+  workflow_dispatch: # Permet de lancer le test manuellement depuis l'onglet Actions
+
+jobs:
+  test_ssh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tester la connexion et le dossier
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "--- Début du test ---"
+            echo "Utilisateur actuel : $(whoami)"
+            echo "Vérification du dossier du projet..."
+            if [ -d "/home/edgar/docker-projects/bot-anarchism" ]; then
+              echo "✅ Le dossier existe."
+              cd /home/edgar/docker-projects/bot-anarchism
+              ls -la
+            else
+              echo "❌ Le dossier /home/edgar/docker-projects/bot-anarchism n'existe pas !"
+              mkdir -p /home/edgar/docker-projects/bot-anarchism
+              echo "Dossier créé."
+            fi
+            echo "Vérification de Docker..."
+            docker --version && echo "✅ Docker est installé." || echo "❌ Docker non trouvé."
+            echo "--- Test terminé ---"
