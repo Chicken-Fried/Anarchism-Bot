@@ -26,9 +26,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Chemins et Configuration Globale ──────────────────────────────────────
-BASE_DIR = Path(__file__).parent
 DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS", "images/maps")
-
 IMAGE_DIR = os.path.abspath(DB_IMAGES_MAPS)
 
 # ── Types de Véhicules (SQB) ───────────────────────────────────────────────
@@ -45,16 +43,18 @@ TYPE_COLORS: Dict[str, Tuple[int, int, int]] = {
 TYPE_ORDER = ["MT", "LT", "AA", "HT", "TT", "SPG", "FV", "HELI", "PLANE", "SUB", "SHIP"]
 
 # ── Polices ───────────────────────────────────────────────────────────────
+FONT_DIR = Path("utils") / "fonts"
+
 _FONT_PATHS_BOLD = [
-    str(BASE_DIR / "fonts" / "JosefinSans-Bold.ttf")
+    str(FONT_DIR / "JosefinSans-Bold.ttf")
 ]
 
-_FONT_PATHS_REG = [p.replace("Bold", "").replace("-Bold", "") for p in _FONT_PATHS_BOLD] + [
-    str(BASE_DIR / "fonts" / "JosefinSans-Regular.ttf")
+_FONT_PATHS_REG = [
+    str(FONT_DIR / "JosefinSans-Regular.ttf")
 ]
 
 _FONT_PATHS_CN = [
-    str(BASE_DIR / "fonts" / "RuiZiRuiXianQiaoPiJian1-0-1.ttf")
+    str(FONT_DIR / "RuiZiRuiXianQiaoPiJian1-0-1.ttf")
 ]
 
 # ── Dimensions Canvas et Scoreboard (CORRIGÉ) ─────────────────────────────
