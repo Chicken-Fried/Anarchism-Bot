@@ -31,11 +31,12 @@ load_dotenv()
 
 log = logging.getLogger("replay_db")
 
+ENV_UNITS_PATH = os.getenv("DATABASE_UNITS", "database/all_units.json")
 ENV_DB_PATH = os.getenv("DATABASE_REPLAY", "data/sqb_data.db")
 ENV_REPLAYS_PATH = os.getenv("DATABASE_REPLAYS_WRPL", "data/replays")
 #PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-#_db_path = os.getenv("DATABASE_REPLAY")
+DB_UNITS = os.path.abspath(ENV_UNITS_PATH)
 DB_PATH = os.path.abspath(ENV_DB_PATH)
 REPLAYS_PATH = os.path.abspath(ENV_REPLAYS_PATH)
 
@@ -50,20 +51,17 @@ def _load_units() -> dict:
     global _units_cache
     if _units_cache:
         return _units_cache
-    candidates = [
-        Path(__file__).parent / "all_units.json",        # wrpl/all_units.json
-        Path(__file__).parent.parent / "all_units.json", # racine bot
-        Path("all_units.json"),                          # cwd
-    ]
-    for p in candidates:
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    _units_cache = json.load(f)
-                log.debug("all_units.json chargé depuis %s (%d véhicules)", p, len(_units_cache))
-                return _units_cache
-            except Exception as exc:
-                log.warning("Impossible de charger %s : %s", p, exc)
+
+    p = Path(DB_UNITS)
+
+    if p.exists():
+        try:
+            with open(p, encoding="utf-8") as f:
+                _units_cache = json.load(f)
+            log.debug("all_units.json chargé depuis %s (%d véhicules)", p, len(_units_cache))
+            return _units_cache
+        except Exception as exc:
+            log.warning("Impossible de charger %s : %s", p, exc)
     log.warning("all_units.json introuvable — vehicle_name/type ne seront pas enrichis")
     return {}
 
