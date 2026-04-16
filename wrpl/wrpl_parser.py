@@ -2567,8 +2567,7 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
 
     vehicles_players_slot = _parse_from_raw_vehicles(
         list_raw=all_raw,
-        vehicles_database=_vdb_filter,
-        lineup_per_players=possibles_vehicles_replay
+        vehicles_database=_vdb_filter
     )
 
     """lineup_per_player = create_lineup_player(
