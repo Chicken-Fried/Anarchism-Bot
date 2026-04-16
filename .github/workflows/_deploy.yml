@@ -16,6 +16,7 @@ jobs:
           username: ${{ secrets.DEBIAN_USER }}
           key: ${{ secrets.GIT_PROJECTS }}
           port: ${{ secrets.DEBIAN_PORT }}
+          debug: true
           script: |
             mkdir -p /home/edgar/docker-projects/bot-anarchism
             cd /home/edgar/docker-projects/bot-anarchism
