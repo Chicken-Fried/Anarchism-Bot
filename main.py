@@ -69,16 +69,16 @@ async def on_error(event, *args, **kwargs):
 
 @bot.event
 async def on_disconnect():
-    print(f"{bot.user.name} s'est déconnecté!")
+    print(f"{bot.user.name} - connexion interrompue !")
 
-    # ── Arrêt propre du poller ────────────────────────────────────────────
-    await poller.stop()
-    # ─────────────────────────────────────────────────────────────────────
 
 @bot.event
 async def on_close():
     print(f"{bot.user.name} s'est éteint!")
 
+    # ── Arrêt propre du poller ────────────────────────────────────────────
+    await poller.stop()
+    # ─────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     for filename in os.listdir(COGS):
