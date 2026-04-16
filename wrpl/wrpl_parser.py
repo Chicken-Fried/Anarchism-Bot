@@ -1300,7 +1300,7 @@ def _search_slot(pk: RawPacket) -> tuple:
 
     return -1, None
 
-def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_players: dict) -> list[PlayerVehicle] | list:
+def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[PlayerVehicle] | list:
     '''
     Extrait le numéro de slot du payload ECS type 6.
 
@@ -1365,7 +1365,7 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
             search_range = parts[idx - 4:idx] if idx >= 4 else parts[0:idx]
             search_range = search_range[::-1]
 
-            #print(f"SEARCH RANGE:      {search_range}")
+            print(f"SEARCH RANGE:      {search_range}")
 
             for possible_vehicle in search_range:
                 try:
@@ -1379,7 +1379,7 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
                 if any(char in clean_name for char in FORBIDDEN_CHARS):
                     continue
 
-                #print(f"CLEAN NAME:      {clean_name}")
+                print(f"CLEAN NAME:      {clean_name}")
 
                 best_match_for_this_part = None
 
@@ -1387,8 +1387,8 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
                 if matches:
                     matched_id = matches[0]
 
-                    check_match = lineup_per_players.get(slot)
-                    #print(f"CHECK MATCH        :{check_match}")
+                    check_match = vehicle_db.keys()
+                    print(f"CHECK MATCH        :{check_match}")
 
                     if matched_id in check_match:
                         best_match_for_this_part = vehicle_db[matched_id]
@@ -1413,7 +1413,7 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
 
 
 def _double_check_vehicle(
-        pk: RawPacket, vehicle_db: dict | None, lineup_per_players: dict, unfound_slot: list
+        pk: RawPacket, vehicle_db: dict | None, unfound_slot: list
 ) -> list[PlayerVehicle] | list:
     '''
     Revérifie les slots non trouvés dans les paquets.
@@ -1518,7 +1518,7 @@ def _double_check_vehicle(
                 if matches:
                     matched_id = matches[0]
 
-                    check_match = lineup_per_players.get(slot)
+                    check_match = vehicle_db.keys()
 
                     # K5_0 => correspond pas que à 5
                     if matched_id in check_match:
@@ -1541,7 +1541,7 @@ def _double_check_vehicle(
                     )
                     #print(f"BEST MATCH RECHECK       :{best_match_for_this_part}")
 
-            if slot not in vehicles_players:
+            """if slot not in vehicles_players:
                 possible_match = lineup_per_players.get(slot)
                 len_match = len(possible_match)
 
@@ -1559,7 +1559,7 @@ def _double_check_vehicle(
                                 image_path=getattr(possible_match, 'image_path', None),
                                 vehicle_br=getattr(possible_match, 'br', None)
                             )
-                        )
+                        )"""
 
 
     return vehicles_players
@@ -1619,13 +1619,13 @@ def _search_vehicle(pk: RawPacket, rt1_idx: int | None, slot: int, vehicle_db: d
     return None
 
 
-def parse_v_player(pk: RawPacket, vehicle_database: dict, lineup_per_players: dict) -> Any:
+def parse_v_player(pk: RawPacket, vehicle_database: dict) -> Any:
     try:
         if not _matches_pk(pk):
             return None
 
         results = []
-        vehicles = _search_vehicle_check(pk, vehicle_database, lineup_per_players)
+        vehicles = _search_vehicle_check(pk, vehicle_database)
 
         print(f"[PlayerVehicle] [!] vehicles: {vehicles}")
 
@@ -1652,13 +1652,12 @@ def parse_v_player(pk: RawPacket, vehicle_database: dict, lineup_per_players: di
         return None
 
 def _parse_from_raw_vehicles(
-        list_raw: list[bytes], vehicles_database: dict, lineup_per_players: dict) -> dict[int, PlayerVehicle]:
+        list_raw: list[bytes], vehicles_database: dict) -> dict[int, PlayerVehicle]:
     """
     Extrait les données des véhicules des joueurs dans les replays.
 
     :param list_raw: Liste qui contient les bytes du replay
     :param vehicles_database: Dictionnaire filtrer des véhicules utilisés lors de la game
-    :param lineup_per_players: dictionnaire qui donne la lineup de véhicules possible pour chaque joueur
     :return:
     """
 
@@ -1674,7 +1673,7 @@ def _parse_from_raw_vehicles(
         for pk in read_packets(stream):
 
             if pk.packet_type == 6:
-                parsed_data = parse_v_player(pk, vehicles_database, lineup_per_players)
+                parsed_data = parse_v_player(pk, vehicles_database)
 
                 # Normalisation en liste pour traiter uniformément (objet unique ou liste)
                 items = parsed_data if isinstance(parsed_data, list) else [parsed_data]
@@ -1709,7 +1708,7 @@ def _parse_from_raw_vehicles(
         for pk in read_packets(stream):
 
             if pk.packet_type == 6:
-                parsed_data = _double_check_vehicle(pk, vehicles_database, lineup_per_players, unfound_slot)
+                parsed_data = _double_check_vehicle(pk, vehicles_database, unfound_slot)
 
                 # Normalisation en liste pour traiter uniformément (objet unique ou liste)
                 items = parsed_data if isinstance(parsed_data, list) else [parsed_data]
@@ -1825,7 +1824,7 @@ def extract_vehicle_map_from_results(results: dict) -> dict[int, str]:
     return vehicle_map
 
 
-def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[str], dict]:
+def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[str]]:
     """
     Extrait les statistiques de fin de partie depuis le Results BLK.
 
@@ -1844,10 +1843,10 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
     """
     stats = []
     vehicles_replay = []
-    vehicles_by_player = {}
+    #vehicles_by_player = []
 
     if not results:
-        return stats, vehicles_replay, vehicles_by_player
+        return stats, vehicles_replay #vehicles_by_player
 
     result_list = (results.get('result') or results.get('results')
                    or results.get('player') or results.get('mplace') or [])
@@ -1919,7 +1918,7 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
 
         # Fallback : matchingInfo[userId].crafts_info.array0 (rankUnused=False)
         if not vehicle and user_id:
-            lineup_per_players = []
+            #lineup_per_players = []
             matching = results.get('matchingInfo', {})
             info = matching.get(str(user_id), {}) if isinstance(matching, dict) else {}
             crafts = info.get('crafts_info', {}) if isinstance(info, dict) else {}
@@ -1927,12 +1926,12 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
                 for k, craft in crafts.items():
                     if isinstance(craft, dict):
                         if craft["name"]:
-                            lineup_per_players.append(craft["name"])
+                            #lineup_per_players.append(craft["name"])
 
                             if not craft["name"] in vehicles_replay:
                                 vehicles_replay.append(craft["name"])
 
-                vehicles_by_player[i] = lineup_per_players
+                #vehicles_by_player[i] = lineup_per_players
 
                 j = 0
                 while True:
@@ -1959,7 +1958,7 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
             vehicle=vehicle, is_winner=is_winner, raw=r,
         ))
 
-    return stats, vehicles_replay, vehicles_by_player
+    return stats, vehicles_replay
 
 
 # =============================================================================
@@ -2009,7 +2008,6 @@ def build_player_table(
     slot_players:      list[PlayerFromSlot],
     stats:             list[PlayerStats],
     vehicles_players:  dict[int, PlayerVehicle],
-    lineup_players:    dict[int, VehicleInfo],
     vehicle_map:       dict = None,  # userId → vehicle_name depuis matchingInfo
 ) -> dict[int, Player]:
     """
@@ -2046,7 +2044,6 @@ def build_player_table(
             if slp.title:       p.title    = slp.title
         elif has_real_name:
             v = vehicles_players.get(slp.slot)
-            l = lineup_players.get(slp.slot)
             if v:
                 # Le véhicule existe pour ce slot précis
                 table[slp.slot] = Player(
@@ -2057,8 +2054,7 @@ def build_player_table(
                     vehicle_type=v.vehicle_type,
                     country=v.country,
                     rank=0, vehicle_image_path=v.image_path,
-                    vehicle_br=v.vehicle_br,
-                    lineup_vehicles=l
+                    vehicle_br=v.vehicle_br
 
                 )
                 print(f"Tout est correct => slot={slp.slot} | vehicle={v.vehicle_id}")
@@ -2071,7 +2067,7 @@ def build_player_table(
                     vehicle="?", vehicle_name="?",
                     vehicle_type="?", country="?",
                     rank=0, vehicle_image_path="?",
-                    vehicle_br=0, lineup_vehicles=l
+                    vehicle_br=0
 
                 )
                 print(f"Manque des données => slot={slp.slot} | vehicle='?'")
@@ -2555,7 +2551,7 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     print(f"RESULT BLK: {final_results_blk}")
 
     # Stats depuis Results BLK
-    uncompleted_stats, possibles_vehicles_replay, lineup_per_player = extract_stats_from_results(final_results_blk or {})
+    uncompleted_stats, possibles_vehicles_replay = extract_stats_from_results(final_results_blk or {})
 
     _vdb_filter = _vehicles_filter(
         vehicles=_vdb,
@@ -2572,13 +2568,13 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     vehicles_players_slot = _parse_from_raw_vehicles(
         list_raw=all_raw,
         vehicles_database=_vdb_filter,
-        lineup_per_players=lineup_per_player
+        lineup_per_players=possibles_vehicles_replay
     )
 
-    lineup_per_player = create_lineup_player(
+    """lineup_per_player = create_lineup_player(
         database_vehicles=_vdb,
         list_vehicles=lineup_per_player
-    )
+    )"""
 
     # Déduplication slot players : garde le dernier par slot
     slot_deduped: dict[int, PlayerFromSlot] = {}
@@ -2644,7 +2640,6 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
         slot_players=list(slot_deduped.values()),
         stats=complete_stats,
         vehicles_players=vehicles_players_slot,
-        lineup_players=lineup_per_player,
         vehicle_map=vehicle_map
     )
 

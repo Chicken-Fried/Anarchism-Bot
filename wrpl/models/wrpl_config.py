@@ -169,7 +169,6 @@ class Player:
     # Tous les véhicules observés en jeu (via kills en tant que killer ou victim)
     vehicles_seen:  set = field(default_factory=set, repr=False)
     # Stats fin de partie
-    lineup_vehicles: list | None = None
     kills:        int  = 0
     deaths:       int  = 0
     assists:      int  = 0

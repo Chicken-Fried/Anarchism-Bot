@@ -181,19 +181,6 @@ class ReplayDB:
                 score                   INTEGER DEFAULT 0,
                 activity                REAL DEFAULT 0
             );
-            
-            CREATE TABLE IF NOT EXISTS lineup_player (
-                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id              INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                slot                    INTEGER,
-                name                    TEXT NOT NULL,
-                clan_tag                TEXT,
-                vehicle                 TEXT,
-                vehicle_name            TEXT,
-                vehicle_type            TEXT,
-                vehicle_image_patch     TEXT,
-                inserted_at             TEXT NOT NULL
-            );
 
             CREATE TABLE IF NOT EXISTS lineups (
                 id                      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,8 +197,6 @@ class ReplayDB:
                 ON teams(clan_tag);
             CREATE INDEX IF NOT EXISTS idx_players_session
                 ON players(session_id);
-            CREATE INDEX IF NOT EXISTS idx_lineup_player_session
-                ON lineup_player(session_id);
             CREATE INDEX IF NOT EXISTS idx_lineups_clan_slot
                 ON lineups(clan_tag, session_slot);
             """)
@@ -379,27 +364,6 @@ class ReplayDB:
                         p.score,
                         p.activity
                     ),
-                )
-
-
-                for v in p.lineup_vehicles:
-                    conn.execute(
-                        """INSERT INTO lineup_player
-                           (session_id, slot, name, clan_tag, vehicle,
-                            vehicle_name, vehicle_type, vehicle_image_patch, 
-                            inserted_at)
-                           VALUES (?,?,?,?,?,?,?,?,?)""",
-                        (
-                            session_db_id,
-                            p.slot,
-                            p.name,
-                            clan,
-                            v.id or "",
-                            (getattr(v, "display_name", "") or "") or _enrich_vehicle(v.id or "")[0],
-                            (getattr(v, "vehicle_type", "") or "") or _enrich_vehicle(v.id or "")[1],
-                            (getattr(v, "image_path", "") or "") or _enrich_vehicle(v.id or "")[3],
-                            now,
-                        ),
                 )
 
                 if p.is_winner and p.team:
