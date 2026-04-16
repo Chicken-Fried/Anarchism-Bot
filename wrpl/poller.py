@@ -15,6 +15,7 @@ Setup initial (une seule fois) :
 import asyncio
 import logging
 import os
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -352,6 +353,7 @@ class WTPoller:
             )
         except Exception as exc:
             log.error("parse_replay_files %s : %s", session_hex, exc)
+            traceback.print_exc()
             return False
 
         # Enrich (all_units.json)
