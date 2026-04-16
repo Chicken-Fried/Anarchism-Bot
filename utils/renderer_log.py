@@ -26,8 +26,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Chemins et Configuration Globale ──────────────────────────────────────
-DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS", "images/maps")
-IMAGE_DIR = os.path.abspath(DB_IMAGES_MAPS)
+#DB_IMAGES_MAPS = os.getenv("DATABASE_IMAGES_MAPS", "images/maps")
+#IMAGE_DIR = os.path.abspath(DB_IMAGES_MAPS)
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+IMAGE_DIR = str(ROOT_DIR / "images" / "maps")
 
 # ── Types de Véhicules (SQB) ───────────────────────────────────────────────
 TYPE_COLORS: Dict[str, Tuple[int, int, int]] = {
@@ -43,7 +46,9 @@ TYPE_COLORS: Dict[str, Tuple[int, int, int]] = {
 TYPE_ORDER = ["MT", "LT", "AA", "HT", "TT", "SPG", "FV", "HELI", "PLANE", "SUB", "SHIP"]
 
 # ── Polices ───────────────────────────────────────────────────────────────
-FONT_DIR = Path("utils") / "fonts"
+#FONT_DIR = Path("utils") / "fonts"
+SCRIPT_DIR = Path(__file__).resolve().parent
+FONT_DIR = SCRIPT_DIR / "fonts"
 
 _FONT_PATHS_BOLD = [
     str(FONT_DIR / "JosefinSans-Bold.ttf")

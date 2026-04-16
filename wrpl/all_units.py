@@ -68,7 +68,7 @@ ENV_DB_PATH = os.getenv("DATABASE_UNITS", "database/all_units.json")
 ENV_IMAGES_VEHICLES = os.getenv("DATABASE_IMAGES_VEHICLES", "images/vehicles")
 
 DEFAULT_OUTPUT    = os.path.abspath(ENV_DB_PATH)
-IMAGES_DIR        = os.path.abspath(ENV_IMAGES_VEHICLES)
+IMAGES_DIR        = Path(os.path.abspath(ENV_IMAGES_VEHICLES))
 
 
 # ── Helpers réseau ────────────────────────────────────────────────────────────
