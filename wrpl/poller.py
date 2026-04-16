@@ -340,11 +340,6 @@ class WTPoller:
 
         # Parse (dans un thread pour ne pas bloquer asyncio)
         #sys.path.insert(0, str(Path(__file__).parent))
-        """try:
-            import wrpl_parser as wp
-        except ImportError:
-            log.error("wrpl_parser.py introuvable")
-            return False"""
 
         try:
             replay_data = await asyncio.to_thread(
