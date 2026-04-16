@@ -13,6 +13,7 @@ jobs:
           host: ${{ secrets.DEBIAN_HOST }}
           username: ${{ secrets.DEBIAN_USER }}
           key: ${{ secrets.GIT_PROJECTS }}
+          port: ${{ secrets.DEBIAN_PORT }}
           script: |
             echo "--- Début du test ---"
             echo "Utilisateur actuel : $(whoami)"
