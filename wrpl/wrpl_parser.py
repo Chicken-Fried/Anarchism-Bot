@@ -1419,16 +1419,6 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
 
                 best_match_for_this_part = None
 
-                """# Recherche dans la DB
-                for vid, vehicle_obj in vehicle_db.items():
-                    # On vérifie si le nom propre est contenu dans l'ID de la DB (ou inversement)
-
-                    if vid in clean_name:
-                        # On cherche le match le plus long pour éviter les faux positifs (ex: 'm4' vs 'amx_m4')
-                        if len(vid) > max_length:
-                            max_length = len(vid)
-                            best_match_for_this_part = vehicle_obj"""
-
                 matches = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
                 if matches:
                     matched_id = matches[0]
@@ -1436,7 +1426,6 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None, lineup_per_pla
                     check_match = lineup_per_players.get(slot)
                     #print(f"CHECK MATCH        :{check_match}")
 
-                    #K5_0 => correspond pas que à 5
                     if matched_id in check_match:
                         best_match_for_this_part = vehicle_db[matched_id]
 
