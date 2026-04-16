@@ -2125,7 +2125,7 @@ def build_player_table(
 
         # Les slots sans nom sont ignorés : pas de Player créé pour eux
 
-    def _search_clan_tag(id_player: Player.user_id, verbose: bool = False) -> str:
+    def _search_clan_tag(id_player: int, verbose: bool = False) -> str:
         url = f"https://api.thunderinsights.dk/v1/users/direct/{id_player}"
 
         if verbose:
