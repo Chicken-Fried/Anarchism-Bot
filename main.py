@@ -75,6 +75,10 @@ async def on_disconnect():
     await poller.stop()
     # ─────────────────────────────────────────────────────────────────────
 
+@bot.event
+async def on_close():
+    print(f"{bot.user.name} s'est éteint!")
+
 
 if __name__ == '__main__':
     for filename in os.listdir(COGS):
