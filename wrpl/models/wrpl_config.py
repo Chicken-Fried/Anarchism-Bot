@@ -210,7 +210,7 @@ class VehicleInfo:
     image_path:       str = ''   # Path de l'image de chaque véhicule
 
     @classmethod
-    def from_dict(cls, d: dict) -> VehicleInfo:
+    def from_dict(cls, d: dict) -> 'VehicleInfo':
         """Construit depuis un dict all_units.json (clés variables selon la source)."""
         return cls(
             id               = d.get('unit_full_name') or "",
