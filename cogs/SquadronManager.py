@@ -2,7 +2,7 @@ import nextcord
 import logging
 import os
 
-from datetime import datetime, timezone, time
+from datetime import datetime, timezone, timedelta, time
 from wrpl.all_units import build
 from pathlib import Path
 
@@ -68,7 +68,7 @@ class SquadronManager(commands.Cog):
             print("[SquadronManager Cog]     Erreurr - Erreur lors de la mise à jour de all_units.json: %s", e)
             log.error("Erreur lors de l'exécution de daily_task : %s", e)
 
-    @nextcord.slash_command(
+    """@nextcord.slash_command(
         name="comp-lite",
         description="Retourne la line-up d'une team"
     )
@@ -144,7 +144,116 @@ class SquadronManager(commands.Cog):
 
             embed.add_field(name="\u200b", value=field_value, inline=False)
 
+        await interaction.response.send_message(embed=embed)"""
+
+    @nextcord.slash_command(
+        name="comp-lite",
+        description="Retourne la line-up d'une team"
+    )
+    async def insert_composition_lite(self,
+                                      interaction: nextcord.Interaction,
+                                      squadron_tag: str = nextcord.SlashOption(
+                                          name="tag_escadron",
+                                          description="Entrez le tag de l'escadron"
+                                      )
+                                      ):
+        tag = normalize_clan_tag(squadron_tag)
+        lineups = self.db.get_lineups_for_clan(tag)
+
+        if not lineups:
+            return await interaction.response.send_message(
+                f"❌ Aucune composition trouvée pour le tag `{tag}`.",
+                ephemeral=True
+            )
+
+        # 1. Trier les lineups par date (du plus récent au plus ancien)
+        lineups.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        # 2. Vérification de la condition "Plus de 2 heures"
+        now = datetime.now(timezone.utc)
+        two_hours_ago = now - timedelta(hours=2)
+
+        all_old = True
+        for l in lineups:
+            try:
+                ts = datetime.fromisoformat(l['timestamp'])
+                if ts.tzinfo is None: ts = ts.replace(tzinfo=timezone.utc)
+                if ts >= two_hours_ago:
+                    all_old = False  # On a trouvé au moins une comp récente
+                    break
+            except:
+                continue
+
+        # 3. Détermination de la configuration de l'embed (Couleur, Liste, Icone)
+        if all_old:
+            # Cas : Uniquement des données vieilles de plus de 2h
+            display_list = [lineups[0]]  # On n'affiche que la plus récente
+            embed_color = 0xFF0000  # Rouge
+            warning_icon = "⚠️ "
+        else:
+            # Cas : Données récentes présentes
+            display_list = lineups[:10]  # Limite à 10 compositions
+            embed_color = 0x00FF00  # Vert
+            warning_icon = ""
+
+        embed = nextcord.Embed(
+            title=f"{warning_icon}Comps for {tag}",
+            description="Comps seen in the last 24 hours",
+            color=embed_color
+        )
+
+        # 4. Construction des champs pour la liste sélectionnée (display_list)
+        for i, lineup in enumerate(display_list, start=1):
+            players = lineup.get("players", [])
+            if not players:
+                continue
+
+            # Calcul du résumé (ex: 4F / 1T)
+            type_counts = {}
+            for p in players:
+                v_type = (p.format_vehicle_type() if hasattr(p, 'format_vehicle_type') else (
+                            p.get("vehicle_type") or "Unknown")).upper()
+                short_type = v_type[0] if v_type else "?"
+                type_counts[short_type] = type_counts.get(short_type, 0) + 1
+            summary_str = " / ".join([f"{count}{t}" for t, count in type_counts.items()])
+
+            # Construction de la liste des joueurs
+            player_lines = []
+            for p in players:
+                name = p["name"]
+                v_name = p["vehicle_name"] or "Unknown"
+                formatted_line = f"{name[:15].ljust(15)} | {v_name}"
+                player_lines.append(formatted_line)
+            player_list_str = "\n".join(player_lines)
+
+            # Calcul du temps écoulé
+            try:
+                session_time = datetime.fromisoformat(lineup["timestamp"])
+                if session_time.tzinfo is None:
+                    session_time = session_time.replace(tzinfo=timezone.utc)
+                diff = now - session_time
+                last_seen = format_duration(diff)
+            except Exception:
+                last_seen = "Unknown"
+
+            # Construction du champ (Field)
+            field_value = (
+                f"**COMP {i}**\n"
+                f"**Last seen:** {last_seen}\n"
+                f"**Comp:** `{summary_str}`\n"
+                f"```\n{player_list_str}\n```"
+            )
+
+            embed.add_field(name="\u200b", value=field_value, inline=False)
+
+        # Footer pour info supplémentaire si nécessaire
+        if all_old:
+            embed.set_footer(text="Attention : Données datant de plus de 2 heures.")
+        elif len(lineups) > 10:
+            embed.set_footer(text=f"Affichage des 10 dernières compos sur {len(lineups)} trouvées.")
+
         await interaction.response.send_message(embed=embed)
+
 
     @nextcord.slash_command(
         name="comp-full",
