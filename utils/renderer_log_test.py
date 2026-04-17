@@ -1,15 +1,12 @@
 import io
 import random
 import re
-from pathlib import Path
+from pathlib import Path  # Correction typo : pathlib
 from typing import Optional, List, Tuple, Dict
 from wrpl.models.wrpl_config import Player, ReplayData, WRPLHeader
 from wrpl.wrpl_parser import parse_replay_files
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-
-# Note: On suppose que ReplayData, Player et WRPLHeader sont importés ou définis ailleurs
-# from your_module import ReplayData, Player, WRPLHeader
 
 # ── Configuration Globale ──────────────────────────────────────────────────
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -20,14 +17,14 @@ STAT_LABELS = ["AK", "GK", "D", "A", "S"]
 
 # Couleurs pour les nouvelles statistiques
 STAT_COLORS = [
-(80, 255, 130),  # AK (Air Kills) - Vert
-(60, 120, 200),  # GK (Ground Kills) - Bleu
-(255, 80, 80),  # D (Deaths) - Rouge
-(130, 180, 25),  # A (Assists) - Cyan
-(255, 220, 50),  # S (Score) - Jaune
- ]
+    (80, 255, 130),  # AK (Air Kills) - Vert
+    (60, 120, 200),  # GK (Ground Kills) - Bleu
+    (255, 80, 80),  # D (Deaths) - Rouge
+    (130, 180, 25),  # A (Assists) - Cyan
+    (255, 220, 50),  # S (Score) - Jaune
+]
 
-# ── Dimensions et Layout (AJUSTÉS pour 5 stats) ────────────────────────────
+# ── Dimensions et Layout ────────────────────────────────────────────────────
 CANVAS_W, CANVAS_H = 940, 528
 SCOREBOARD_W = 760
 SCOREBOARD_H = 460
@@ -42,9 +39,7 @@ HEADER_H = 75
 CONTENT_Y = HEADER_H
 MAX_ROWS = 8
 
-# Ajustement de la zone stats pour accueillir AK, GK, D, A, S
-STATS_ZONE_W = 140  # Augmenté pour les 5 colonnes
-BADGE_SIZE = 32  # Taille des images véhicules
+BADGE_SIZE = 32
 PLAYER_ROW_H = 48
 
 # ── Polices ────────────────────────────────────────────────────────────────
@@ -53,7 +48,7 @@ FONT_DIR = SCRIPT_DIR / "fonts"
 
 
 def _load_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    path = FONT_DIR / ("JosefinSans-Bold.ttf" if bold else "JosefinSans-Regular.ttf")
+    path = FONT_DIR / ("JosefinSans-Bold.ttf" if bold else "JosefinSans-Regular.ttf")  # Ajuster selon tes noms réels
     if path.exists():
         return ImageFont.truetype(str(path), size)
     return ImageFont.load_default()
@@ -69,22 +64,15 @@ def _load_cn_font(size: int) -> ImageFont.FreeTypeFont:
 # ── Utilitaires ────────────────────────────────────────────────────────────
 
 def get_full_paths_in_dir(directory_path: str) -> List[str]:
-    """
-    Retourne une liste des chemins complets des fichiers présents
-    dans le dossier spécifié (ex: 'data/replays/66e4bc20018.../file.wrpl').
-    """
     path = Path(directory_path)
-
     if not path.exists() or not path.is_dir():
-        print(f"Erreur : Le chemin {directory_path} n'est pas un dossier valide.")
         return []
-
-    # str(f) donne le chemin complet (parent + nom du fichier)
     return [str(f) for f in path.iterdir() if f.is_file()]
+
 
 def is_chinese(text: str) -> bool:
     for char in text:
-        cp = ord(rad_char := char)
+        cp = ord(char)
         if 0x4E00 <= cp <= 0x9FFF or 0x3040 <= cp <= 0x30FF or 0xAC00 <= cp <= 0xD7AF:
             return True
     return False
@@ -97,64 +85,6 @@ def _map_key(level: str) -> str:
         "", s, flags=re.IGNORECASE)
     s = re.sub(r"_\d+$", "", s)
     return s.lower().strip("_")
-
-
-# ── Rendu des colonnes ─────────────────────────────────────────────────────
-
-def _draw_team_column(canvas: Image.Image,
-                      draw: ImageDraw.ImageDraw,
-                      players_list: List,
-                      y_start: int,
-                      is_left_team: bool,
-                      font_ltn: ImageFont.FreeTypeFont,
-                      font_asia: ImageFont.FreeTypeFont,
-                      font_small: ImageFont.FreeTypeFont) -> None:
-    mid_x = SCOREBOARD_W // 2
-    # On définit le point d'ancrage du bloc de stats pour l'équipe
-    # Pour l'équipe gauche, on décale vers la gauche du centre.
-    # Pour l'équipe droite, on décalt vers la droite du centre.
-    TEAM_BLOCK_ANCHOR = mid_x - 70 if is_left_team else mid_x + 70
-
-    for i, player in enumerate(players_list[:MAX_ROWS]):
-        y_base = y_start + i * PLAYER_ROW_H
-        y_center = y_base + (PLAYER_ROW_H // 2)
-
-        # --- 1. Gestion de l'image du véhicule (Badge) ---
-        x_badge = 20 if is_left_team else SCOREBOARD_W - 52
-        try:
-            if player.vehicle_image_path and Path(player.vehicle_image_path).exists():
-                v_img = Image.open(player.vehicle_image_path).convert("RGBA")
-                v_img = v_img.resize((BADGE_SIZE, BADGE_SIZE), Image.LANCZOS)
-                canvas.paste(v_img, (x_badge + 35, y_base + 4), v_img) #canvas.paste(v_img, (x_badge, y_base + 4), v_img)
-            else:
-                draw.rounded_rectangle([x_badge, y_base + 4, x_badge + 32, y_base + 36], radius=6, fill=(100, 100, 100))
-        except Exception:
-            draw.rounded_rectangle([x_badge, y_base + 4, x_badge + 32, y_base + 36], radius=6, fill=(100, 100, 100))
-
-        # --- 2. Stats (AK / GK / D / A / S) - ALIGNEMENT FIXÉ ---
-        stats_vals = [player.air_kills, player.ground_kills, player.deaths, player.assists, player.score]
-
-        for val, color, offset in zip(stats_vals, STAT_COLORS, STAT_X_OFFSETS):
-            txt = str(val)
-            tw = draw.textbbox((0, 0), txt, font=font_small)[2]
-            # On utilise TEAM_BLOCK_ANCHOR + l'offset de la colonne pour un alignement parfait
-            draw.text((TEAM_BLOCK_ANCHOR + offset - tw // 2, y_center - 8),
-                      txt, font=font_small, fill=color)
-
-        # --- 3. Noms et Véhicules ---
-        name = f"{player.name}".strip()
-        vname = player.vehicle_name
-        f_p = font_asia if is_chinese(name) else font_ltn
-
-        if is_left_team:
-            draw.text((x_badge + 40, y_base + 3), name, font=f_p, fill=(255, 255, 255))
-            draw.text((x_badge + 40, y_base + 20), vname, font=font_small, fill=(200, 200, 200))
-        else:
-            tw_name = draw.textbbox((0, 0), name, font=f_p)[2]
-            tw_vname = draw.textbbox((0, 0), vname, font=font_small)[2]
-            x_end = x_badge - tw_name - 5
-            draw.text((x_end, y_base + 3), name, font=f_p, fill=(255, 255, 255))
-            draw.text((x_end - (tw_vname - tw_name), y_base + 20), vname, font=font_small, fill=(200, 200, 200))
 
 def _draw_rounded_rect(draw: ImageDraw.ImageDraw,
                        bbox: tuple, radius: int, fill: int):
@@ -200,6 +130,7 @@ def _find_map_image(map_name: str, maps_dir: Path) -> Optional[Path]:
             candidates.append(p)
     return random.choice(candidates) if candidates else None
 
+
 def _load_background(level: str, maps_dir: Path) -> Image.Image:
     """Charge l'image de fond pour la map donnée."""
     map_name = _map_key(level)
@@ -216,7 +147,7 @@ def _load_background(level: str, maps_dir: Path) -> Image.Image:
     bg_w, bg_h = bg.size
     scale = max(CANVAS_W / bg_w, CANVAS_H / bg_h)
     new_w, new_h = int(bg_w * scale), int(bg_h * scale)
-    bg = bg.resize((new_w, new_h), Image.LANCZOS)
+    bg = bg.resize((new_w, new_h), Image.Resampling.LANCZOS)
     left = (new_w - CANVAS_W) // 2
     top = (new_h - CANVAS_H) // 2
     bg = bg.crop((left, top, left + CANVAS_W, top + CANVAS_H))
@@ -225,7 +156,72 @@ def _load_background(level: str, maps_dir: Path) -> Image.Image:
     bg = enhancer.enhance(0.45).convert("RGBA")
     return bg
 
-# ── Fonction Principale : render_scoreboard ───────────────────────────────
+# ── Rendu des colonnes ─────────────────────────────────────────────────────
+
+def _draw_team_column(canvas: Image.Image,
+                      draw: ImageDraw.ImageDraw,
+                      players_list: List,
+                      y_start: int,
+                      is_left_team: bool,
+                      font_ltn: ImageFont.FreeTypeFont,
+                      font_asia: ImageFont.FreeTypeFont,
+                      font_small: ImageFont.FreeTypeFont,
+                      mid_x: int) -> None:
+    # L'ancrage reste le même
+    TEAM_BLOCK_ANCHOR = mid_x - 70 if is_left_team else mid_x + 70
+
+    # --- CORRECTION : On n'inverse JAMAIS les offsets ici ---
+    # On utilise toujours l'ordre standard [-45, -20, 0, 20, 45]
+    current_offsets = STAT_X_OFFSETS
+    current_colors = STAT_COLORS if is_left_team else list(reversed(STAT_COLORS))
+
+    for i, player in enumerate(players_list[:MAX_ROWS]):
+        y_base = y_start + i * PLAYER_ROW_H
+        y_center = y_base + (PLAYER_ROW_H // 2)
+
+        # --- 1. Badge Véhicule (Inchangé) ---
+        x_badge = 20 if is_left_team else SCOREBOARD_W - 52
+        try:
+            if player.vehicle_image_path and Path(player.vehicle_image_path).exists():
+                v_img = Image.open(player.vehicle_image_path).convert("RGBA")
+                v_img = v_img.resize((BADGE_SIZE, BADGE_SIZE), Image.Resampling.LANCZOS)
+                canvas.paste(v_img, (x_badge, y_base + 4), v_img)
+            else:
+                draw.rounded_rectangle([x_badge, y_base + 4, x_badge + 32, y_base + 36], radius=6, fill=(100, 100, 100))
+        except Exception:
+            draw.rounded_rectangle([x_badge, y_base + 4, x_badge + 32, y_base + 36], radius=6, fill=(100, 100, 100))
+
+        # --- 2. Stats (Chiffres) ---
+        # On prépare les valeurs brutes [AK, GK, D, A, S]
+        stats_vals = [player.air_kills, player.ground_kills, player.deaths, player.assists, player.score]
+
+        # Si Team 2, on inverse les valeurs pour que le Score soit le premier (index 0)
+        # Ainsi, il recevra l'offset -45 (le plus proche du centre)
+        if not is_left_team:
+            stats_vals = list(reversed(stats_vals))
+
+        for val, color, offset in zip(stats_vals, current_colors, current_offsets):
+            txt = str(val)
+            tw = draw.textbbox((0, 0), txt, font=font_small)[2]
+            draw.text((TEAM_BLOCK_ANCHOR + offset - tw // 2, y_center - 8), txt, font=font_small, fill=color)
+        # --- 3. Noms et Véhicules (Inchangé) ---
+        name = player.name.strip()
+        vname = player.vehicle_name
+        f_p = font_asia if is_chinese(name) else font_ltn
+        if is_left_team:
+            draw.text((x_badge + 40, y_base + 3), name, font=f_p, fill=(255, 255, 255))  # Correction typo couleur
+            draw.text((x_badge + 40, y_base + 20), vname, font=font_small, fill=(200, 200, 200))
+        else:
+            tw_name = draw.textbbox((0, 0), name, font=f_p)[2]
+            tw_vname = draw.textbbox((0, 0), vname, font=font_small)[2]
+            x_end = x_badge - tw_name - 5
+            draw.text((x_end, y_base + 3), name, font=f_p, fill=(255, 255, 255))
+            draw.text((x_end - (tw_vname - tw_name), y_base + 20), vname, font=font_small, fill=(200, 200, 200))
+
+
+# ... (Fonctions _create_glass_panel, _load_background, etc. restent identiques) ...
+# [Note: Assure-toi que _load_background et les autres utilitaires sont présents comme dans ton script]
+
 def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
     maps_path = Path(maps_dir)
     header = replay_data.header
@@ -237,14 +233,10 @@ def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
         teams_players.setdefault(p.team, []).append(p)
 
     team_ids = list(teams_players.keys())[:2]
-    if len(team_ids) < 2:
-        team_ids = [team_ids[0], 0] if len(team_ids) == 1 else [0, 1]
+    if len(team_ids) < 2: team_ids = [team_ids[0], 0] if len(team_ids) == 1 else [0, 1]
 
     team1_list = teams_players.get(team_ids[0], [])
     team2_list = teams_players.get(team_ids[1], [])
-
-    print(f"TEAM 1:   {team1_list}")
-    print(f"TEAM 2:   {team2_list}")
 
     score1 = sum(p.score for p in team1_list)
     score2 = sum(p.score for p in team2_list)
@@ -253,7 +245,7 @@ def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
     # 2. Fond et Canvas
     bg = _load_background(header.level, maps_path)
     canvas = bg.copy()
-    mid_x = SCOREBOARD_W // 2  # <--- DEFINITION DE MID_X ICI
+    mid_x = SCOREBOARD_W // 2
 
     # 3. Panneau Glassmorphism
     glass_region = canvas.crop((SB_X, SB_Y, SB_X + SCOREBOARD_W, SB_Y + SCOREBOARD_H))
@@ -263,11 +255,11 @@ def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
     glass_final = Image.composite(blurred, glass_panel, mask)
 
     draw = ImageDraw.Draw(glass_final)
-    f_clan = _load_font(24, True)
+    f_clan = _load_font(24, True);
     f_map = _load_font(36, True)
-    f_small = _load_font(13, False)
-    f_ltn_p = _load_font(15, False)
-    f_asia_p = _load_cn_font(15) # <--- DEFINITION DE F_ASIA_P ICI
+    f_small = _load_font(13, False);
+    f_ltn_p = _load_font(15, False);
+    f_asia_p = _load_cn_font(15)
 
     # 4. Header (Clans & Map)
     clan1_name = (team1_list[0].clan_tag if team1_list else "TEAM 1").upper()
@@ -277,27 +269,60 @@ def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
 
     map_disp = _map_key(header.level).replace("_", " ").title()
     map_bbox = draw.textbbox((0, 0), map_disp, font=f_map)
-    draw.text((mid_x - (map_bbox[2]-map_bbox[0]) // 2, 12), map_disp,
-              fill=(255, 255, 255, 230), font=f_map)
+    draw.text((mid_x - (map_bbox[2] - map_bbox[0]) // 2, 12), map_disp, fill=(255, 255, 255, 230), font=f_map)
 
     draw.text((GLASS_CORNER_RADIUS + 4, 8), clan1_name, font=f_clan, fill=c1_color)
     clan2_bbox = draw.textbbox((0, 0), clan2_name, font=f_clan)
-    draw.text((SCOREBOARD_W - GLASS_CORNER_RADIUS - 4 - (clan2_bbox[int(2)]-clan2_bbox[0]), 8),
-              clan2_name, font=f_clan, fill=c2_color)
+    draw.text((SCOREBOARD_W - GLASS_CORNER_RADIUS - 4 - (clan2_bbox[2] - clan2_bbox[0]), 8), clan2_name, font=f_clan,
+              fill=c2_color)
 
-    # 5. Labels Stats (AK/GK/D/A/S)
+    # --- NOUVEAU : Sous le Clan, afficher les types de véhicules (F/B/T/A) ---
+    def get_vehicle_types_str(players: List) -> str:
+        counts = {}
+        for p in players:
+            t = p.vehicle_type.upper()
+            if t: counts[t] = counts.get(t, 0) + 1
+
+        # On veut l'ordre : T, B, F, A puis le reste
+        order = ["T", "B", "F", "A"]
+        parts = []
+        for t in order:
+            if t in counts: parts.append(f"{counts[t]}{t}")
+        for t, count in counts.items():
+            if t not in order: parts.append(f"{count}{t}")
+        return " / ".join(parts)
+
+    types1 = get_vehicle_types_str(team1_list)
+    types2 = get_vehicle_types_str(team2_list)
+    draw.text((GLASS_CORNER_RADIUS + 4, 35), types1, font=f_small, fill=(160, 160, 160))
+    draw.text((SCOREBOARD_W - GLASS_CORNER_RADIUS - 4 - draw.textbbox((0, 0), types2, f_small)[2], 35), types2,
+              font=f_small, fill=(160, 160, 160))
+
+    # 5. Labels Stats (EFFET MIROIR SYNCHRONISÉ)
     label_y = CONTENT_Y - 18
     anchor_left = mid_x - 70
     anchor_right = mid_x + 70
 
-    for side_anchor in [anchor_left, anchor_right]:
-        for label, color, offset in zip(STAT_LABELS, STAT_COLORS, STAT_X_OFFSETS):
-            tw = draw.textbbox((0, 0), label, font=f_small)[2]
-            draw.text((side_anchor + offset - tw // 2, label_y), label, font=f_small, fill=color)
+    # --- TEAM 1 (Gauche) : AK -> S (S'éloigne du centre vers la gauche) ---
+    for label, color, offset in zip(STAT_LABELS, STAT_COLORS, STAT_X_OFFSETS):
+        tw = draw.textbbox((0, 0), label, font=f_small)[2]
+        draw.text((anchor_left + offset - tw // 2, label_y), label, font=f_small, fill=color)
 
-    # 6. Corps des joueurs (On passe le CANVAS pour les images)
-    _draw_team_column(canvas, draw, team1_list, CONTENT_Y, True, f_ltn_p, f_asia_p, f_small)
-    _draw_team_column(canvas, draw, team2_list, CONTENT_Y, False, f_ltn_p, f_asia_p, f_small)
+    # --- TEAM 2 (Droite) : S -> AK (S'éloigne du centre vers la droite) ---
+    # On inverse les labels et couleurs pour que le premier soit 'S',
+    # MAIS on garde les offsets standards pour qu'il soit poussé vers le centre.
+    rev_labels = list(reversed(STAT_LABELS))  # [S, A, D, GK, AK]
+    rev_colors = list(reversed(STAT_COLORS))  # [Jaune, Cyan, Rouge, Bleu, Vert]
+    # On utilise STAT_X_OFFSETS (sans reversed !)
+    rev_offsets = STAT_X_OFFSETS
+
+    for label, color, offset in zip(rev_labels, rev_colors, rev_offsets):
+        tw = draw.textbbox((0, 0), label, font=f_small)[2]
+        draw.text((anchor_right + offset - tw // 2, label_y), label, font=f_small, fill=color)
+
+    # 6. Corps des joueurs (L'appel reste le même, la logique est maintenant DANS la fonction)
+    _draw_team_column(canvas, draw, team1_list, CONTENT_Y, True, f_ltn_p, f_asia_p, f_small, mid_x)
+    _draw_team_column(canvas, draw, team2_list, CONTENT_Y, False, f_ltn_p, f_asia_p, f_small, mid_x)
 
     # 7. Assemblage final
     canvas.paste(glass_final, (SB_X, SB_Y), mask)
@@ -306,6 +331,7 @@ def render_scoreboard(replay_data: 'ReplayData', maps_dir: str) -> bytes:
     canvas.convert("RGB").save(output, "JPEG", quality=100, optimize=True)
     output.seek(0)
     return output.read()
+
 
 # ── Test standalone ───────────────────────────────────────────────────────
 if __name__ == "__main__":
