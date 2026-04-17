@@ -79,118 +79,127 @@ class SquadronManager(commands.Cog):
                                           description="Entrez le tag de l'escadron"
                                       )
                                       ):
-        tag = normalize_clan_tag(squadron_tag)
-        lineups = self.db.get_lineups_for_clan(tag)
+        # 1. On diffère la réponse pour laisser le temps à la DB de répondre (évite le timeout)
+        await interaction.response.defer(ephemeral=True)
 
-        if not lineups:
-            return await interaction.response.send_message(
-                f"❌ Aucune composition trouvée pour le tag `{tag}`.",
-                ephemeral=True
-            )
+        try:
+            tag = normalize_clan_tag(squadron_tag)
+            lineups = self.db.get_lineups_for_clan(tag)
 
-        # 1. Trier les lineups par date (du plus récent au plus ancien)
-        lineups.sort(key=lambda x: x['timestamp'], reverse=True)
+            if not lineups:
+                # Utilisation de followup car on a déjà fait un defer()
+                return await interaction.followup.send(
+                    f"❌ Aucune composition trouvée pour le tag `{tag}`.",
+                    ephemeral=True
+                )
 
-        # 2. Vérification de la condition globale "Plus de 1 heure" pour l'apparence de l'embed
-        now = datetime.now(timezone.utc)
-        one_hour_ago = now - timedelta(hours=1)
-        all_old = True
-        for l in lineups:
-            try:
-                ts = datetime.fromisoformat(l['timestamp'])
-                if ts.tzinfo is None: ts = ts.replace(tzinfo=timezone.utc)
-                if ts >= one_hour_ago:
-                    all_old = False
-                    break
-            except:
-                continue
+            # 2. Trier les lineups par date (du plus récent au plus ancien)
+            lineups.sort(key=lambda x: x['timestamp'], reverse=True)
 
-        # 3. Détermination de la configuration de l'embed (Couleur et Icone globale)
-        if all_old:
-            display_list = [lineups[0]]
-            embed_color = 0xFF0000  # Rouge
-            warning_icon = "⚠️ "
-        else:
-            display_list = lineups[:4]  # Limite à 4 compositions
-            embed_color = 0x00FF00  # Vert
-            warning_icon = ""
+            # 3. Vérification de la condition globale "Plus de 1 heure" pour l'apparence de l'embed
+            now = datetime.now(timezone.utc)
+            one_hour_ago = now - timedelta(hours=1)
+            all_old = True
+            for l in lineups:
+                try:
+                    ts = datetime.fromisoformat(l['timestamp'])
+                    if ts.tzinfo is None: ts = ts.replace(tzinfo=timezone.utc)
+                    if ts >= one_hour_ago:
+                        all_old = False
+                        break
+                except:
+                    continue
 
-        embed = nextcord.Embed(
-            title=f"{warning_icon}Compos de/du {tag}",
-            description="Compos vues dans les dernières 24 heures",
-            color=embed_color
-        )
-
-        # 4. Construction des champs
-        for i, lineup in enumerate(display_list, start=1):
-            players = lineup.get("players", [])
-            if not players:
-                continue
-
-            # --- Calcul du nombre de joueurs pour le format [X/8] ---
-            num_players = len(players)
-
-            # --- Calcul du résumé avec ORDRE STRICT (F/B/T/A) et FILTRE 0 ---
-            type_counts = {}
-            for p in players:
-                v_type = (p.format_vehicle_mode() if hasattr(p, 'format_vehicle_mode') else (
-                        p.get("vehicle_type") or "Inconnu")).upper()
-                short_type = v_type[0] if v_type else "?"
-                type_counts[short_type] = type_counts.get(short_type, 0) + 1
-
-            priority_order = ['F', 'B', 'T', 'A']
-            summary_parts = []
-            for char in priority_order:
-                count = type_counts.get(char, 0)
-                if count > 0:
-                    summary_parts.append(f"{count}{char}")
-
-            if not summary_parts:
-                summary_str = " / ".join([f"{c}{t}" for t, c in type_counts.items()])
+            # 4. Détermination de la configuration de l'embed (Couleur et Icone globale)
+            if all_old:
+                display_list = [lineups[0]]
+                embed_color = 0xFF0000  # Rouge
+                warning_icon = "⚠️ "
             else:
-                summary_str = " / ".join(summary_parts)
+                display_list = lineups[:4]  # Limite à 4 compositions
+                embed_color = 0x00FF00  # Vert
+                warning_icon = ""
 
-            # --- Calcul du temps écoulé et détection de l'âge individuel pour le bloc DIFF ---
-            try:
-                session_time = datetime.fromisoformat(lineup["timestamp"])
-                if session_time.tzinfo is None:
-                    session_time = session_time.replace(tzinfo=timezone.utc)
-                diff = now - session_time
-                last_seen = format_duration(diff)
-
-                # Si cette compo précise est vieille de plus d'une heure, on prépare le préfixe rouge (-)
-                diff_prefix = "- " if (session_time < one_hour_ago) else ""
-            except Exception:
-                last_seen = "Inconnu"
-                diff_prefix = "- "
-
-            # --- Construction de la liste des joueurs avec le préfixe DIFF ---
-            player_lines = []
-            for p in players:
-                name = p["name"]
-                v_name = p["vehicle_name"] or "Inconnu"
-                formatted_line = f"{name[:15].ljust(15)} | {v_name}"
-                # On ajoute le préfixe (soit "- " pour rouge, soit "" pour blanc)
-                player_lines.append(f"{diff_prefix}{formatted_line}")
-
-            player_list_str = "\n".join(player_lines)
-
-            # --- Construction du champ final avec [X/8] ---
-            field_value = (
-                f"**COMPO {i} [{num_players}/8]**\n"
-                f"**Vu il y a:** {last_seen}\n"
-                f"**Compo:** `{summary_str}`\n"
-                f"```diff\n{player_list_str}\n```"
+            embed = nextcord.Embed(
+                title=f"{warning_icon}Compos de/du {tag}",
+                description="Compos vues dans les dernières 24 heures",
+                color=embed_color
             )
-            embed.add_field(name="\u200b", value=field_value, inline=False)
 
-        # Footer
-        if all_old:
-            embed.set_footer(text="Attention : Données datant de plus de 1 heure.")
-        elif len(lineups) > 4:
-            embed.set_footer(text=f"Affichage des 4 dernières compos sur {len(lineups)} trouvées.")
+            # 5. Construction des champs
+            for i, lineup in enumerate(display_list, start=1):
+                players = lineup.get("players", [])
+                if not players:
+                    continue
 
-        await interaction.response.send_message(embed=embed)
+                # --- Calcul du nombre de joueurs pour le format [X/8] ---
+                num_players = len(players)
+
+                # --- Calcul du résumé avec ORDRE STRICT (F/B/T/A) et FILTRE 0 ---
+                type_counts = {}
+                for p in players:
+                    v_type = (p.format_vehicle_mode() if hasattr(p, 'format_vehicle_mode') else (
+                            p.get("vehicle_type") or "Inconnu")).upper()
+                    short_type = v_type[0] if v_type else "?"
+                    type_counts[short_type] = type_counts.get(short_type, 0) + 1
+
+                priority_order = ['F', 'B', 'T', 'A']
+                summary_parts = []
+                for char in priority_order:
+                    count = type_counts.get(char, 0)
+                    if count > 0:
+                        summary_parts.append(f"{count}{char}")
+
+                if not summary_parts:
+                    summary_str = " / ".join([f"{c}{t}" for t, c in type_counts.items()])
+                else:
+                    summary_str = " / ".join(summary_parts)
+
+                # --- Calcul du temps écoulé et détection de l'âge individuel pour le bloc DIFF ---
+                try:
+                    session_time = datetime.fromisoformat(lineup["timestamp"])
+                    if session_time.tzinfo is None:
+                        session_time = session_time.replace(tzinfo=timezone.utc)
+                    diff = now - session_time
+                    last_seen = format_duration(diff)
+
+                    # Si cette compo précise est vieille de plus d'une heure, on prépare le préfixe rouge (-)
+                    diff_prefix = "- " if (session_time < one_hour_ago) else ""
+                except Exception:
+                    last_seen = "Inconnu"
+                    diff_prefix = "- "
+
+                # --- Construction de la liste des joueurs avec le préfixe DIFF ---
+                player_lines = []
+                for p in players:
+                    name = p["name"]
+                    v_name = p["vehicle_name"] or "Inconnu"
+                    formatted_line = f"{name[:15].ljust(15)} | {v_name}"
+                    player_lines.append(f"{diff_prefix}{formatted_line}")
+
+                player_list_str = "\n".join(player_lines)
+
+                # --- Construction du champ final avec [X/8] ---
+                field_value = (
+                    f"**COMPO {i} [{num_players}/8]**\n"
+                    f"**Vu il y a:** {last_seen}\n"
+                    f"**Compo:** `{summary_str}`\n"
+                    f"```diff\n{player_list_str}\n```"
+                )
+                embed.add_field(name="\u200b", value=field_value, inline=False)
+
+            # Footer
+            if all_old:
+                embed.set_footer(text="Attention : Données datant de plus de 1 heure.")
+            elif len(lineups) > 4:
+                embed.set_footer(text=f"Affichage des 4 dernières compos sur {len(lineups)} trouvées.")
+
+            # 6. Envoi final via followup (obligatoire après un defer)
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            # En cas d'erreur, on informe l'utilisateur via followup
+            await interaction.followup.send(f"❌ Une erreur est survenue : {e}")
 
     @nextcord.slash_command(
         name="comp-full",
@@ -204,92 +213,104 @@ class SquadronManager(commands.Cog):
                                           description="Entrez le tag de l'escadron"
                                       )
                                       ):
-        await interaction.response.defer(ephemeral=True)
+        # On diffère la réponse car la DB est lourde
+        await interaction.response.defer(ephemeral=False)
 
         try:
             tag = normalize_clan_tag(squadron_tag)
-            # On récupère les lineups (le plus récent est en premier grâce au tri dans la DB)
             lineups = self.db.get_lineups_for_clan(tag)
 
             if not lineups:
-                return await interaction.response.send_message(
+                return await interaction.followup.send(
                     f"❌ Aucun historique trouvé pour le tag `{tag}`.",
-                    ephemeral=True
+                    epinthemeral=True
                 )
 
-            # On prend la session la plus récente pour l'audit
+            # On prend la session la plus récente
             audit_data = lineups[0]
             players = audit_data.get("players", [])
 
             if not players:
-                return await interaction.response.send_message("❌ Aucune donnée joueur disponible pour cette session.",
-                                                               ephemeral=True)
+                return await interaction.followup.send(
+                    "❌ Aucune donnée joueur disponible pour cette session.",
+                    ephemeral=True
+                )
 
             # --- 1. CALCUL DES STATISTIQUES DE L'ÉQUIPE ---
             total_kills = sum(p.get("kills", 0) for p in players)
             total_deaths = sum(p.get("deaths", 0) for p in players)
             team_kd = total_kills / max(1, total_deaths)
 
-            # --- 2. IDENTIFICATION DU MVP (Le joueur avec le plus haut score) ---
+            # --- 2. IDENTIFICATION DU MVP ---
             mvp_player = max(players, key=lambda x: x.get("score", 0))
 
-            # --- 3. PRÉPARATION DES DONNÉ Renouvellement du bloc DIFF pour les joueurs ---
-            # On utilise '+' pour un K/D >= 1 (Vert) et '-' pour un K/D < 1 (Rouge)
+            # --- 3. PRÉPARATION DU BLOC JOUEURS (DIFF) ---
             player_stats_lines = []
             for p in players:
-
                 le_kd = p.get("kills", 0) / max(1, p.get("deaths", 0))
+                # Utilisation du préfixe diff : + pour vert, - pour rouge
                 prefix = "+ " if le_kd >= 1 else "- "
 
                 name = p["name"]
-                v_name = p["vehicle_name"] or "Inconnu"
+                v_name = p.get("vehicle_name") or "Inconnu"
                 score = p.get("score", 0)
 
-                # Formatage : Nom | K/D | Véhicule | Score
-                line = f"{prefix}{name[:12].ljust(12)} | {le_kd:.2f} | `{v_name}` | {score}pts"
+                # Formatage aligné : Nom | K/D | Véhicule | Score
+                line = f"{prefix}{name[:12].ljust(12)} | {le_kd:.2f} | `{v_name}` | {score} pts"
                 player_stats_lines.append(line)
-
 
             player_block = "\n".join(player_stats_lines)
 
-            # --- 4. CONSTRUCTION DE L'EMBED D'AUDIT ---
+            # --- 4. CONSTRUCTION DE L'EMBED (TOUT EN FRANÇAIS) ---
+
+            # Formatage de la date et l'heure (Ex: 2026-04-16 14:30)
+            # On suppose que timestamp est au format ISO
+            try:
+                dt_obj = datetime.fromisoformat(audit_data['timestamp'].replace('Z', '+00:00'))
+                display_date = dt_obj.strftime("%d/%m/%Y %H:%M")
+            except:
+                display_date = audit_data['timestamp'][:10]
+
             embed = nextcord.Embed(
-                title=f"🔍 Audit Session: `{audit_data['timestamp'][:10]}`",
-                description=f"**Map:** `{audit_data['map']}` | **Mode:** `{audit_data.get('mode', 'Realistic')}`",
+                title=f"🔍 Audit Session: `{display_date}`",
+                description=f"**Carte:** `{audit_data['map']}` | **Mode:** `{audit_data.get('mode', 'Réaliste')}`",
                 color=0x3498db  # Bleu professionnel
             )
 
             # Champ 1: Résultat du match
-            winner_text = "Team 1" if audit_data["winner_team"] == 1 else "Team 2"
+            winner_text = "Équipe 1" if audit_data["winner_team"] == 1 else "Équipe 2"
             embed.add_field(
-                name="🏆 Match Result",
-                value=f"**Winner:** `{winner_text}`\n**Slot:** `{audit_data['session_slot'] or 'N/A'}`",
+                name="🏆 Résultat du Match",
+                value=f"**Vainqueur:** `{winner_text}`\n**Créneau:** `{audit_data['session_slot'] or 'N/A'}`",
                 inline=False
             )
 
-            # Champ 2: Performance Individuelle (Le bloc de code coloré)
+            # Champ 2: Performance Individuelle (Correction du titre et du bloc)
             embed.add_field(
-                name="⚔️ Player Breakdown (K/D $\ge$ 1 in Green)",
+                name="⚔️ Détails des Joueurs (K/D $\ge$ 1 en Vert)",
                 value=f"```diff\n{player_block}\n```",
                 inline=False
             )
 
             # Champ 3: Statistiques Globales de l'équipe
             embed.add_field(
-                name="📊 Team Analytics",
+                name="📊 Statistiques d'Équipe",
                 value=(
                     f"**Total Kills:** `{total_kills}`\n"
-                    f"**Team K/D Ratio:** `{team_kd:.2f}`\n"
+                    f"**Ratio K/D Équipe:** `{team_kd:.2f}`\n"
                     f"**MVP:** 👑 **{mvp_player['name']}**"
                 ),
                 inline=False
             )
 
-            # Footer avec info de la session
-            embed.set_footer(text=f"Session ID: {audit_data['session_id']} | Audit réalisé par {interaction.user.name}")
+            # Footer
+            embed.set_footer(text=f"ID Session: {audit_data['session_id']} | Audit par {interaction.user.name}")
 
+            # Envoi final via followup (car defer a été utilisé)
             await interaction.followup.send(embed=embed)
+
         except Exception as e:
+            # On utilise followup pour signaler l'erreur après le defer
             await interaction.followup.send(f"❌ Erreur lors de l'audit : {e}")
 
 
