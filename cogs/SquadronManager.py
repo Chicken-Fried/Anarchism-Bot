@@ -120,6 +120,8 @@ class SquadronManager(commands.Cog):
                 embed_color = 0x00FF00  # Vert
                 warning_icon = ""
 
+            display_list_reversed = list(reversed(display_list))
+
             embed = nextcord.Embed(
                 title=f"{warning_icon}Compos de/du {tag}",
                 description="Compos vues dans les dernières 24 heures",
@@ -127,7 +129,7 @@ class SquadronManager(commands.Cog):
             )
 
             # 5. Construction des champs
-            for i, lineup in enumerate(display_list, start=1):
+            for i, lineup in enumerate(display_list_reversed, start=1):
                 players = lineup.get("players", [])
                 if not players:
                     continue
