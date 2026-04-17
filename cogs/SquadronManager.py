@@ -287,7 +287,7 @@ class SquadronManager(commands.Cog):
 
             # Champ 2: Performance Individuelle (Correction du titre et du bloc)
             embed.add_field(
-                name="⚔️ Détails des Joueurs (K/D $\ge$ 1 en Vert)",
+                name="⚔️ Détails des Joueurs (K/D ≥ 1 en Vert)",
                 value=f"```diff\n{player_block}\n```",
                 inline=False
             )
