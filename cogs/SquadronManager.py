@@ -192,20 +192,106 @@ class SquadronManager(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-
     @nextcord.slash_command(
         name="comp-full",
-        description="Retourne la line-up complète d'une team",
+        description="Analyse complète et audit d'une session pour un clan (Admin Only)",
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def insert_composition_full(self,
                                       interaction: nextcord.Interaction,
                                       squadron_tag: str = nextcord.SlashOption(
-                                            name="tag_escadron",
-                                            description="Entrez le tag de l'escadron, en minuscule ou en majuscule"
+                                          name="tag_escadron",
+                                          description="Entrez le tag de l'escadron"
                                       )
-    ):
-        return
+                                      ):
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            tag = normalize_clan_tag(squadron_tag)
+            # On récupère les lineups (le plus récent est en premier grâce au tri dans la DB)
+            lineups = self.db.get_lineups_for_clan(tag)
+
+            if not lineups:
+                return await interaction.response.send_message(
+                    f"❌ Aucun historique trouvé pour le tag `{tag}`.",
+                    ephemeral=True
+                )
+
+            # On prend la session la plus récente pour l'audit
+            audit_data = lineups[0]
+            players = audit_data.get("players", [])
+
+            if not players:
+                return await interaction.response.send_message("❌ Aucune donnée joueur disponible pour cette session.",
+                                                               ephemeral=True)
+
+            # --- 1. CALCUL DES STATISTIQUES DE L'ÉQUIPE ---
+            total_kills = sum(p.get("kills", 0) for p in players)
+            total_deaths = sum(p.get("deaths", 0) for p in players)
+            team_kd = total_kills / max(1, total_deaths)
+
+            # --- 2. IDENTIFICATION DU MVP (Le joueur avec le plus haut score) ---
+            mvp_player = max(players, key=lambda x: x.get("score", 0))
+
+            # --- 3. PRÉPARATION DES DONNÉ Renouvellement du bloc DIFF pour les joueurs ---
+            # On utilise '+' pour un K/D >= 1 (Vert) et '-' pour un K/D < 1 (Rouge)
+            player_stats_lines = []
+            for p in players:
+
+                le_kd = p.get("kills", 0) / max(1, p.get("deaths", 0))
+                prefix = "+ " if le_kd >= 1 else "- "
+
+                name = p["name"]
+                v_name = p["vehicle_name"] or "Inconnu"
+                score = p.get("score", 0)
+
+                # Formatage : Nom | K/D | Véhicule | Score
+                line = f"{prefix}{name[:12].ljust(12)} | {le_kd:.2f} | `{v_name}` | {score}pts"
+                player_stats_lines.append(line)
+
+
+            player_block = "\n".join(player_stats_lines)
+
+            # --- 4. CONSTRUCTION DE L'EMBED D'AUDIT ---
+            embed = nextcord.Embed(
+                title=f"🔍 Audit Session: `{audit_data['timestamp'][:10]}`",
+                description=f"**Map:** `{audit_data['map']}` | **Mode:** `{audit_data.get('mode', 'Realistic')}`",
+                color=0x3498db  # Bleu professionnel
+            )
+
+            # Champ 1: Résultat du match
+            winner_text = "Team 1" if audit_data["winner_team"] == 1 else "Team 2"
+            embed.add_field(
+                name="🏆 Match Result",
+                value=f"**Winner:** `{winner_text}`\n**Slot:** `{audit_data['session_slot'] or 'N/A'}`",
+                inline=False
+            )
+
+            # Champ 2: Performance Individuelle (Le bloc de code coloré)
+            embed.add_field(
+                name="⚔️ Player Breakdown (K/D $\ge$ 1 in Green)",
+                value=f"```diff\n{player_block}\n```",
+                inline=False
+            )
+
+            # Champ 3: Statistiques Globales de l'équipe
+            embed.add_field(
+                name="📊 Team Analytics",
+                value=(
+                    f"**Total Kills:** `{total_kills}`\n"
+                    f"**Team K/D Ratio:** `{team_kd:.2f}`\n"
+                    f"**MVP:** 👑 **{mvp_player['name']}**"
+                ),
+                inline=False
+            )
+
+            # Footer avec info de la session
+            embed.set_footer(text=f"Session ID: {audit_data['session_id']} | Audit réalisé par {interaction.user.name}")
+
+            await interaction.followup.send(embed=embed)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erreur lors de l'audit : {e}")
+
 
     @nextcord.slash_command(
         name="log-squadron",
