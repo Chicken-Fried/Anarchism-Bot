@@ -80,7 +80,7 @@ class SquadronManager(commands.Cog):
                                       )
                                       ):
         # 1. On diffère la réponse pour laisser le temps à la DB de répondre (évite le timeout)
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         try:
             tag = normalize_clan_tag(squadron_tag)
