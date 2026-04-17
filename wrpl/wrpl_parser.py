@@ -1382,13 +1382,12 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[Player
                 print(f"CLEAN NAME:      {clean_name}")
 
                 best_match_for_this_part = None
+                check_match = vehicle_db.keys()
 
                 matches = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
+
                 if matches:
                     matched_id = matches[0]
-
-                    check_match = vehicle_db.keys()
-                    print(f"CHECK MATCH        :{check_match}")
 
                     if matched_id in check_match:
                         best_match_for_this_part = vehicle_db[matched_id]
@@ -1484,19 +1483,11 @@ def _double_check_vehicle(
                 if j % 10 == slot:
                     matched_prefix.append((i, j))
 
-                    #print(f"DIGIT MATCH RECHECK      : {(i, j)}")
-
-
-
-    #print(f"MATCHED PREFIX RECHECK:      {matched_prefix}")
-
     if matched_prefix:
         for idx, slot in matched_prefix:
 
             search_range = parts[idx - 4:idx] if idx >= 4 else parts[0:idx]
             search_range = search_range[::-1]
-
-            #print(f"SEARCH RANGE RECHECK:      {search_range}")
 
             for possible_vehicle in search_range:
                 try:
@@ -1510,8 +1501,6 @@ def _double_check_vehicle(
                 if any(char in clean_name for char in FORBIDDEN_CHARS):
                     continue
 
-                #print(f"CLEAN NAME RECHECK:      {clean_name}")
-
                 best_match_for_this_part = None
 
                 matches = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
@@ -1524,7 +1513,6 @@ def _double_check_vehicle(
                     if matched_id in check_match:
                         best_match_for_this_part = vehicle_db[matched_id]
 
-                print(f"BEST MATCH RECHECK      :{best_match_for_this_part}")
                 # Si on a trouvé un véhicule pour ce segment précis
                 if best_match_for_this_part:
                     vehicles_players.append(
@@ -1539,7 +1527,6 @@ def _double_check_vehicle(
                             vehicle_br=getattr(best_match_for_this_part, 'br', None)
                         )
                     )
-                    #print(f"BEST MATCH RECHECK       :{best_match_for_this_part}")
 
             """if slot not in vehicles_players:
                 possible_match = lineup_per_players.get(slot)
@@ -1728,37 +1715,11 @@ def _parse_from_raw_vehicles(
 
 
     dict_after_check = dict(sorted(dict_sorted.items()))
-    #print(f"DICT AFTER CHECK            :{dict_after_check}")
-    # Si un tri par slot est strictement nécessaire :
-    return dict_sorted #dict_after_check
+    return dict_after_check
 
 # =============================================================================
 # 9. EXTRACTION DES STATS DU RESULTS BLK
 # =============================================================================
-
-"""@dataclass
-class PlayerStats:
-    #Stats de fin de partie pour un joueur, extraites du Results BLK.
-    slot:            int
-    name:            str
-    user_id:         int
-    team:            int
-    kills:           int
-    deaths:          int
-    assists:         int
-    damage_dealt:    float
-    score:           int
-    activity:        float      # % d'activité (0.0–1.0)
-    air_kills:       int
-    ground_kills:    int
-    naval_kills:     int
-    vehicle:         str
-    is_winner:       bool
-    raw:             dict = field(default_factory=dict, repr=False)
-
-@dataclass
-class VehiclesReplays:
-    vehicles: list"""
 
 
 def extract_vehicle_map_from_results(results: dict) -> dict[int, str]:
@@ -1964,44 +1925,6 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
 # =============================================================================
 # 10. FUSION — TABLE JOUEURS COMPLÈTE
 # =============================================================================
-
-"""@dataclass
-class Player:
-    #Vue unifiée d'un joueur, toutes sources confondues
-    slot:         int
-    name:         str
-    clan_tag:     str
-    user_id:      int
-    team:         int
-    title:        str
-    # Véhicule principal (settings ou déduit des kills)
-    vehicle:      str       # identifiant interne (ex: germ_panther_II)
-    country:      str
-    rank:         int
-    # Champs avec valeurs par défaut (doivent être après les champs sans défaut)
-    vehicle_name: str  = ''   # nom affiché en jeu (ex: Pz.Kpfw. Panther II) via all_units
-    vehicle_type: str  = ''   # code type : MT/LT/HT/TT/AA/F/BB/BA/H
-    vehicle_br:   float= 0.0  # BR réaliste sol
-    vehicle_image_path: str = '' # Path de l'image de chaque vehicule
-    # Tous les véhicules observés en jeu (via kills en tant que killer ou victim)
-    vehicles_seen:  set = field(default_factory=set, repr=False)
-    # Stats fin de partie
-    lineup_vehicles: list | None = None
-    kills:        int  = 0
-    deaths:       int  = 0
-    assists:      int  = 0
-    air_kills:    int  = 0
-    ground_kills: int  = 0
-    naval_kills:  int  = 0
-    damage_dealt: float = 0.0
-    score:        int  = 0
-    activity:     float = 0.0
-    is_winner:    bool  = False
-    # Kills commis durant la partie
-    kills_recorded: list = field(default_factory=list, repr=False)
-    # Awards reçus
-    awards:         list = field(default_factory=list, repr=False)"""
-
 
 def build_player_table(
     settings_players:  list[PlayerFromSettings],

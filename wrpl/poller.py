@@ -58,7 +58,7 @@ SQB_PAYLOAD = {
 # ── Créneaux SQB UTC ──────────────────────────────────────────────────────
 def get_session_slot(dt: datetime) -> str | None:
     h = dt.hour
-    if 1 <= h < 9:   return "morning"
+    if 0 <= h < 9:   return "morning"
     if 14 <= h < 23: return "evening"
     return None
 
@@ -291,8 +291,6 @@ class WTPoller:
         if not base_url:
             return False
 
-        print(f"ITEM PROCESS ITEM: {item}")
-        print(f"ID_ITEM:  {item.get('id')}")
         # session_hex depuis sessionIdHex ou converti depuis sessionId
         session_hex = item.get("sessionIdHex") or item.get("id")
         if not session_hex:
@@ -317,11 +315,11 @@ class WTPoller:
                       session_hex, start_time, window_start)
             return False
 
-        # Attendre 10 min après la fin avant téléchargement
+        """# Attendre 10 min après la fin avant téléchargement
         end_time = item.get("endTime", 0)
         if end_time and (now_ts - end_time) < 600:
             log.debug("SQB %s terminé depuis moins de 10 min — attente", session_hex)
-            return False
+            return False"""
 
         log.info("Nouveau SQB : %s — %s", session_hex, item.get("title", ""))
 

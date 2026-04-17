@@ -125,7 +125,7 @@ def _draw_team_column(canvas: Image.Image,
             if player.vehicle_image_path and Path(player.vehicle_image_path).exists():
                 v_img = Image.open(player.vehicle_image_path).convert("RGBA")
                 v_img = v_img.resize((BADGE_SIZE, BADGE_SIZE), Image.LANCZOS)
-                canvas.paste(v_img, (x_badge, y_base + 4), v_img)
+                canvas.paste(v_img, (x_badge + 35, y_base + 4), v_img) #canvas.paste(v_img, (x_badge, y_base + 4), v_img)
             else:
                 draw.rounded_rectangle([x_badge, y_base + 4, x_badge + 32, y_base + 36], radius=6, fill=(100, 100, 100))
         except Exception:
