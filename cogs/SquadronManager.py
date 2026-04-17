@@ -91,7 +91,7 @@ class SquadronManager(commands.Cog):
         # 1. Trier les lineups par date (du plus récent au plus ancien)
         lineups.sort(key=lambda x: x['timestamp'], reverse=True)
 
-        # 2. Vérification de la condition "Plus de 1 heure"
+        # 2. Vérification de la condition globale "Plus de 1 heure" pour l'apparence de l'embed
         now = datetime.now(timezone.utc)
         one_hour_ago = now - timedelta(hours=1)
         all_old = True
@@ -105,7 +105,7 @@ class SquadronManager(commands.Cog):
             except:
                 continue
 
-        # 3. Détermination de la configuration de l'embed
+        # 3. Détermination de la configuration de l'embed (Couleur et Icone globale)
         if all_old:
             display_list = [lineups[0]]
             embed_color = 0xFF0000  # Rouge
@@ -117,7 +117,7 @@ class SquadronManager(commands.Cog):
 
         embed = nextcord.Embed(
             title=f"{warning_icon}Compos de/du {tag}",
-            description="Compos vues dans les dernières 24 heures", #Comps seen in the last 24 hours
+            description="Compos vues dans les dernières 24 heures",
             color=embed_color
         )
 
@@ -127,54 +127,60 @@ class SquadronManager(commands.Cog):
             if not players:
                 continue
 
-            # --- CORRECTION : Calcul du résumé avec ORDRE STRICT (F/B/T/A) et FILTRE 0 ---
+            # --- Calcul du nombre de joueurs pour le format [X/8] ---
+            num_players = len(players)
+
+            # --- Calcul du résumé avec ORDRE STRICT (F/B/T/A) et FILTRE 0 ---
             type_counts = {}
             for p in players:
-                v_type = (p.format_vehicle_type() if hasattr(p, 'format_vehicle_type') else (
-                        p.get("vehicle_type") or "Unknown")).upper()
+                v_type = (p.format_vehicle_mode() if hasattr(p, 'format_vehicle_mode') else (
+                        p.get("vehicle_type") or "Inconnu")).upper()
                 short_type = v_type[0] if v_type else "?"
                 type_counts[short_type] = type_counts.get(short_type, 0) + 1
 
-            # On définit l'ordre de priorité souhaité
             priority_order = ['F', 'B', 'T', 'A']
             summary_parts = []
-
             for char in priority_order:
                 count = type_counts.get(char, 0)
-                if count > 0:  # On n'ajoute que si le compte est supérieur à 0
+                if count > 0:
                     summary_parts.append(f"{count}{char}")
 
-            # Si aucun des types prioritaires n'est trouvé, on affiche les types trouvés par défaut
             if not summary_parts:
                 summary_str = " / ".join([f"{c}{t}" for t, c in type_counts.items()])
             else:
                 summary_str = " / ".join(summary_parts)
-            # ------------------------------------------------------------------------------
 
-            # Construction de la liste des joueurs
-            player_lines = []
-            for p in players:
-                name = p["name"]
-                v_name = p["vehicle_name"] or "Unknown"
-                formatted_line = f"{name[:15].ljust(15)} | {v_name}"
-                player_lines.append(formatted_line)
-            player_list_str = "\n".join(player_lines)
-
-            # Calcul du temps écoulé
+            # --- Calcul du temps écoulé et détection de l'âge individuel pour le bloc DIFF ---
             try:
                 session_time = datetime.fromisoformat(lineup["timestamp"])
                 if session_time.tzinfo is None:
                     session_time = session_time.replace(tzinfo=timezone.utc)
                 diff = now - session_time
                 last_seen = format_duration(diff)
-            except Exception:
-                last_seen = "Unknown"
 
+                # Si cette compo précise est vieille de plus d'une heure, on prépare le préfixe rouge (-)
+                diff_prefix = "- " if (session_time < one_hour_ago) else ""
+            except Exception:
+                last_seen = "Inconnu"
+                diff_prefix = "- "
+
+            # --- Construction de la liste des joueurs avec le préfixe DIFF ---
+            player_lines = []
+            for p in players:
+                name = p["name"]
+                v_name = p["vehicle_name"] or "Inconnu"
+                formatted_line = f"{name[:15].ljust(15)} | {v_name}"
+                # On ajoute le préfixe (soit "- " pour rouge, soit "" pour blanc)
+                player_lines.append(f"{diff_prefix}{formatted_line}")
+
+            player_list_str = "\n".join(player_lines)
+
+            # --- Construction du champ final avec [X/8] ---
             field_value = (
-                f"**COMP {i}**\n"
+                f"**COMPO {i} [{num_players}/8]**\n"
                 f"**Vu il y a:** {last_seen}\n"
-                f"**Comp:** `{summary_str}`\n"
-                f"```\n{player_list_str}\n```"
+                f"**Compo:** `{summary_str}`\n"
+                f"```diff\n{player_list_str}\n```"
             )
             embed.add_field(name="\u200b", value=field_value, inline=False)
 
