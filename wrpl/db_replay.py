@@ -210,7 +210,7 @@ class ReplayDB:
             ).fetchone()
             return row is not None
 
-    def get_lineups_for_clan(
+    def _get_lineups_for_clan(
         self, clan_tag: str, session_slot: Optional[str] = None
     ) -> list[dict]:
         """
@@ -256,6 +256,62 @@ class ReplayDB:
                     "timestamp":    row["timestamp"],
                     "winner_team":  row["winner_team"],
                     "players":      [dict(p) for p in players],
+                })
+            return result
+
+    def get_lineups_for_clan(
+            self, clan_tag: str, session_slot: Optional[str] = None
+    ) -> list[dict]:
+        clan_tag = normalize_clan_tag(clan_tag)
+        with self._conn() as conn:
+            # 1. Préparation de la requête SQL (identique à ton code)
+            if session_slot:
+                query = """SELECT l.id, l.session_id, l.lineup_hash, l.session_slot,
+                           s.map, s.timestamp, s.winner_team
+                    FROM lineups l JOIN sessions s ON l.session_id=s.id
+                    WHERE l.clan_tag=? AND l.session_slot=?
+                    ORDER BY s.inserted_at DESC"""
+                params = (clan_tag, session_slot)
+            else:
+                query = """SELECT l.id, l.session_id, l.lineup_hash, l.session_slot,
+                           s.map, s.timestamp, s.winner_team
+                    FROM lineups l JOIN sessions s ON l.session_id=s.id
+                    WHERE l.clan_tag=?
+                    ORDER BY s.inserted_at DESC"""
+                params = (clan_tag,)
+
+            rows = conn.execute(query, params).fetchall()
+
+            result = []
+            seen_hashes = set()  # <--- CRUCIAL : Pour suivre les doublons de lineup_hash
+
+            for row in rows:
+                current_hash = row["lineup_hash"]
+
+                # --- ÉTAPE DE DÉDUPLICATION ---
+                if current_hash in seen_hashes:
+                    continue  # Si on a déjà vu ce hash, on saute cette itération
+
+                seen_hashes.add(current_hash)  # On marque ce hash comme "vu"
+
+                # 2. Récupération des joueurs (identique à ton code)
+                players = conn.execute(
+                    """SELECT name, clan_tag, vehicle, vehicle_name,
+                              vehicle_type, team, kills, deaths, score
+                       FROM players
+                       WHERE session_id=? AND clan_tag=?
+                       ORDER BY score DESC""",
+                    (row["session_id"], clan_tag),
+                ).fetchall()
+
+                result.append({
+                    "session_id": row["session_id"],
+                    "lineup_hash": current_hash,
+                    "session_slot": row["session_slot"],
+                    "map": row["map"],
+                    "timestamp": row["timestamp"],
+                    "winner_team": row["winner_team"],
+                    "players": [dict(p) for p in players],
                 })
             return result
 
