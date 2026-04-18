@@ -69,8 +69,9 @@ class SquadronManager(commands.Cog):
             log.error("Erreur lors de l'exécution de daily_task : %s", e)
 
     @nextcord.slash_command(
-        name="comp-lite",
-        description="Retourne la line-up d'une team"
+        name="cleanup_db",
+        description="Nettoie la base de données manuellement [Admin seulement]",
+        default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def cleanup_db_manually(self, interaction: nextcord.Interaction):
         await interaction.response.defer(ephemeral=False)
