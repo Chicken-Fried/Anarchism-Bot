@@ -35,7 +35,7 @@ class SquadronManager(commands.Cog):
         """
         print("[SquadronManager Cog]     Automatisation lancée !")
         try:
-            # On appelle la méthode de nettoyage avec un délai de 24h
+            # On appelle la méthode de nettoyage avec un délai de 12h
             self.db.cleanup_old_sessions(keep_hours=12)
             print("[SquadronManager Cog]     Automatisation terminée !")
         except Exception as e:
@@ -67,6 +67,35 @@ class SquadronManager(commands.Cog):
         except Exception as e:
             print("[SquadronManager Cog]     Erreurr - Erreur lors de la mise à jour de all_units.json: %s", e)
             log.error("Erreur lors de l'exécution de daily_task : %s", e)
+
+    @nextcord.slash_command(
+        name="comp-lite",
+        description="Retourne la line-up d'une team"
+    )
+    async def cleanup_db_manually(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=False)
+
+        try:
+            print("[SquadronManager Cog]     Automatisation lancée !")
+            try:
+                # On appelle la méthode de nettoyage avec un délai de 12h
+                self.db.cleanup_old_sessions(keep_hours=12)
+                print("[SquadronManager Cog]     Automatisation terminée !")
+            except Exception as e:
+                print("[SquadronManager Cog]     Erreurr - Erreur lors de l'automatisation: %s", e)
+                log.error("Erreur lors de l'exécution de daily_task : %s", e)
+                return await interaction.followup.send(
+                    f"❌ Nettoyage de la base de données échoué.",
+                    ephemeral=True
+                )
+
+            await interaction.followup.send("✅ Nettoyage de la base de données effectué !")
+
+        except Exception as e:
+            # En cas d'erreur, on informe l'utilisateur via followup
+            await interaction.followup.send(f"❌ Une erreur est survenue : {e}")
+
+
 
     @nextcord.slash_command(
         name="comp-lite",
