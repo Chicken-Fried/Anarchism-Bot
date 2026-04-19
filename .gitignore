@@ -22,6 +22,9 @@ pip-delete-this-directory.txt
 
 # --- Base de données et Données locales ---
 # On ignore le contenu du dossier data, mais pas le dossier lui-même
+vendor/*
+!vendor/.gitkeep
+
 data/*
 !data/.gitkeep
 
