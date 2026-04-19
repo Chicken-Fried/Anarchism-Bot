@@ -37,7 +37,7 @@ ENV_REPLAYS_PATH = os.getenv("DATABASE_REPLAYS_WRPL", "data/replays")
 #PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DB_UNITS = os.path.abspath(ENV_UNITS_PATH)
-DB_PATH = os.path.abspath(ENV_DB_PATH)
+DB_PATH = Path(os.path.abspath(ENV_DB_PATH))
 REPLAYS_PATH = os.path.abspath(ENV_REPLAYS_PATH)
 
 # ── Chargement all_units.json (singleton) ────────────────────────────────
@@ -514,7 +514,6 @@ class ReplayDB:
                 conn.execute("DELETE FROM players WHERE session_id=?", (sid,))
                 conn.execute("DELETE FROM teams WHERE session_id=?", (sid,))
                 conn.execute("DELETE FROM lineups WHERE session_id=?", (sid,))
-                conn.execute("DELETE FROM lineup_player WHERE session_id=?", (sid,))
                 conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
 
             conn.commit()

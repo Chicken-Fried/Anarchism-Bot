@@ -69,7 +69,7 @@ class SquadronManager(commands.Cog):
             log.error("Erreur lors de l'exécution de daily_task : %s", e)
 
     @nextcord.slash_command(
-        name="cleanup_db",
+        name="cleanup-db",
         description="Nettoie la base de données manuellement [Admin seulement]",
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
