@@ -30,18 +30,18 @@ def is_url(url) -> bool | None:
 
     try:
         if not isinstance(url, str):
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
                   f"Erreur - Type invalide: {type(url).__name__}")
             return False
         if not url or not url.strip():
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
                   f"Erreur - URL vide ou invalide")
             return False
 
         result = urlparse(url)
 
         if all([result.scheme, result.netloc]):
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
                   f"URL valide:{url}")
             return True
 
@@ -52,22 +52,22 @@ def is_url(url) -> bool | None:
             if not result.netloc:
                 missing.append("netloc (domaine)")
 
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
                   f"Erreur - URL invalide - Manque:{', '.join(missing)}")
             return False
 
     except TypeError as e:
-        print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+        print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
               f"Erreur - TypeError: {e}")
         return None
 
     except ValueError as e:
-        print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+        print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
               f"Erreur - ValueError: {e}")
         return None
 
     except Exception as e:
-        print(f"[Web_scraping Fetcher_sqb_schedular]    Is_url: "
+        print(f"[Web_scraping Fetcher_sqb_scheduler]    Is_url: "
               f"Erreur - Erreur inconnue: {type(e).__name__} - {e}")
         return None
 
@@ -82,7 +82,7 @@ def url_page() -> Optional[str]:
         return None
     return url
 
-def process_schedular_sqb(lines) -> List[Tuple[str, datetime, datetime]]:
+def process_scheduler_sqb(lines) -> List[Tuple[str, datetime, datetime]]:
     """
     Traite les lignes HTML pour extraire les dates SQB
     :param
@@ -111,7 +111,7 @@ def process_schedular_sqb(lines) -> List[Tuple[str, datetime, datetime]]:
 
                 #Condition2: Vérifie que les dates se précèdent entre eux
                 if end_date <= start_date:
-                    print(f"[Web_scraping Fetcher_sqb_schedular]    Process_schedular_sqb: "
+                    print(f"[Web_scraping Fetcher_sqb_scheduler]    Process_scheduler_sqb: "
                           f"Erreur - Date invalide pour BR {br}: "
                           f"Fin-({end_date}) avant Début-({start_date})")
                     continue
@@ -119,34 +119,34 @@ def process_schedular_sqb(lines) -> List[Tuple[str, datetime, datetime]]:
                 results.append((br, start_date, end_date))
 
             else:
-                print(f"[Web_scraping Fetcher_sqb_schedular]    Process_schedular_sqb: "
+                print(f"[Web_scraping Fetcher_sqb_scheduler]    Process_scheduler_sqb: "
                       f"Erreur - Aucune correspondance trouvée sur la ligne")
 
         except ValueError as e:
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Process_schedular_sqb: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Process_scheduler_sqb: "
                   f"Erreur - ValueError: {e}")
             continue
 
     return results
 
 
-def initialize_sqb_schedular() -> List[Tuple[str, datetime, datetime]]:
+def initialize_sqb_scheduler() -> List[Tuple[str, datetime, datetime]]:
     """
     Initialise le calendrier SQB en récupérant les données du forum.
     :return:
         List[List[br, start_date, end_date]] ou [] en cas d'erreur
     """
 
-    schedular_sqb: List[Tuple[str, datetime, datetime]] = []
+    scheduler_sqb: List[Tuple[str, datetime, datetime]] = []
 
     try:
         url = url_page()
 
         #Condition1: Si URL n'existe pas, alors on fournit une liste vide
         if not url:
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_scheduler: "
                   f"Erreur - URL invalide")
-            return schedular_sqb
+            return scheduler_sqb
 
         max_retries = 5
         for attempt in range(max_retries):
@@ -156,36 +156,36 @@ def initialize_sqb_schedular() -> List[Tuple[str, datetime, datetime]]:
                 break
 
             except requests.exceptions.Timeout as e:
-                print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
+                print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_scheduler: "
                       f"Erreur - Timeout [Tentative {attempt + 1}/{max_retries}]: {e}")
                 if attempt == max_retries - 1:
                     raise
 
             except requests.exceptions.RequestException as e:
-                print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
+                print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_scheduler: "
                       f"Erreur - Erreur HTTP [Tentative {attempt + 1}/{max_retries}]: {e}")
                 if attempt == max_retries - 1:
-                    return schedular_sqb
+                    return scheduler_sqb
 
         soup = BeautifulSoup(response.text, "html.parser")
         cooked_div = soup.find_all("div", {"class": "post"})
 
         if not cooked_div:
-            print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
+            print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_scheduler: "
                   f"Erreur - Structure HTML non trouvée [Classe .post]")
-            return schedular_sqb
+            return scheduler_sqb
 
         lines = cooked_div.find_all("p")
 
-        results = process_schedular_sqb(lines)
-        schedular_sqb.extend(results)
+        results = process_scheduler_sqb(lines)
+        scheduler_sqb.extend(results)
 
-        print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
-              f"Calendrier SQB initialisé avec {len(schedular_sqb)} semaines de saison")
+        print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_schedular: "
+              f"Calendrier SQB initialisé avec {len(scheduler_sqb)} semaines de saison")
 
     except Exception as e:
-        print(f"[Web_scraping Fetcher_sqb_schedular]    Initialize_sqb_schedular: "
+        print(f"[Web_scraping Fetcher_sqb_scheduler]    Initialize_sqb_schedular: "
               f"Erreur - Erreur inattendue: {type(e).__name__} - {e}")
-        return schedular_sqb
+        return scheduler_sqb
 
-    return schedular_sqb
+    return scheduler_sqb
