@@ -46,6 +46,8 @@ class OpenTicket(nextcord.ui.Button):
 
         # Condition 1 : Si la catégorie = TICKETS = existe, alors on la maintient
         cat_results = self.db.get_cat_ticket(interaction.guild_id, get_all=True)
+
+        print(f"CAT RESULTS:    {cat_results}")
         category = None
 
         if isinstance(cat_results, TicketGuilds):
@@ -143,13 +145,13 @@ class OpenTicket(nextcord.ui.Button):
                 print(f"[Tickets Views]    Channel: {channel}")
                 i+=1
 
-                if channel is None:
+                if channel is None and not ch.is_application:
                     self.db.supress_ticket(ch)
                     channel_results.remove(ch)
                     continue
-
-                await channel.delete()
-                self.db.supress_ticket(ch)
+                elif channel and not ch.is_application:
+                    await channel.delete()
+                    self.db.supress_ticket(ch)
 
 
             print(f"[Tickets Views]   Ouverture d'un ticket | "
@@ -212,7 +214,8 @@ class OpenTicket(nextcord.ui.Button):
 
             await interaction.followup.send(
                 f"Ton ticket a été créé : {new_channel.mention}",
-                delete_after=10
+                delete_after=15,
+                ephemeral=True
             )
             return
 
@@ -256,6 +259,7 @@ class OpenTicket(nextcord.ui.Button):
                 channel_id=new_channel.id,
                 user_id=user.id,
                 user_name=user.name,
+                application_ticket=0
             )
             self.db.insert_ticket(data)
 
@@ -274,7 +278,8 @@ class OpenTicket(nextcord.ui.Button):
 
             await interaction.followup.send(
                 f"Ton ticket a été créé : {new_channel.mention}",
-                delete_after=10
+                delete_after=15,
+                ephemeral=True
             )
 
 

@@ -26,7 +26,7 @@ class Tickets(commands.Cog):
     async def on_ready(self):
         print("[Tickets Cog]   Le Cog est prêt!")
 
-    @nextcord.slash_command(
+    """@nextcord.slash_command(
         name="make-channel_ticket-channel",
         description="Transforme ce channel en créateur de ticket",
         default_member_permissions=nextcord.Permissions(administrator=True)
@@ -43,7 +43,7 @@ class Tickets(commands.Cog):
             embeds=view.embd_open_ticket(),
             view=view,
             ephemeral=False
-        )
+        )"""
 
     @nextcord.slash_command(
         name="add-application-channel",
@@ -51,6 +51,8 @@ class Tickets(commands.Cog):
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def create_channel_application(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
         view = OpenApplicationsView(db=self.db)
 
@@ -59,14 +61,14 @@ class Tickets(commands.Cog):
         if isinstance(results, TicketViewChannels):
             channel = guild.get_channel(results.view_channel_id)
             if channel:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"❌ - Un channel application viewer existe déjà, le voici => {channel.mention}",
                     ephemeral=True
                 )
             else:
                 if results:
                     self.db.supress_ch_application(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                             f"✅ - Création d'un nouveau channel application viewer\n"
                             f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -107,7 +109,7 @@ class Tickets(commands.Cog):
                     if result:
                         self.db.supress_ch_application(result)
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 content=f"✅ - Suppression des applications viewer dans la base de données\n"
                         f"✅ - Création d'un nouveau channel application viewer",
                 ephemeral=True
@@ -120,7 +122,7 @@ class Tickets(commands.Cog):
             }
 
             channel = await interaction.guild.create_text_channel(
-                name=f"📥-ouvrir-un-ticket",
+                name=f"📋-candidature",
                 overwrites=overwrites,
                 position=0
             )
@@ -137,9 +139,9 @@ class Tickets(commands.Cog):
             )
             return
 
-        await interaction.response.send_message(
-            content=f"✅ - Aucun ticket viewer dans la base de données\n"
-                    f"✅ - Création d'un nouveau channel ticket viewer",
+        await interaction.followup.send(
+            content=f"✅ - Aucun application viewer dans la base de données\n"
+                    f"✅ - Création d'un nouveau channel application viewer",
             ephemeral=True
         )
 
@@ -150,7 +152,7 @@ class Tickets(commands.Cog):
         }
 
         channel = await interaction.guild.create_text_channel(
-            name=f"📥-ouvrir-un-ticket",
+            name=f"📋-candidature",
             overwrites=overwrites,
             position=0
         )
@@ -173,6 +175,8 @@ class Tickets(commands.Cog):
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def create_channel_ticket(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
         view = OpenTicketsView(db=self.db)
 
@@ -181,14 +185,14 @@ class Tickets(commands.Cog):
         if isinstance(results, TicketViewChannels):
             channel = guild.get_channel(results.view_channel_id)
             if channel:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"❌ - Un channel ticket viewer existe déjà, le voici => {channel.mention}",
                     ephemeral=True
                 )
             else:
                 if results:
                     self.db.supress_ch_ticket(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                         f"✅ - Création d'un nouveau channel ticket viewer\n"
                         f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -229,7 +233,7 @@ class Tickets(commands.Cog):
                     if result:
                         self.db.supress_ch_ticket(result)
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 content=f"✅ - Suppression des ticket viewer dans la base de données\n"
                     f"✅ - Création d'un nouveau channel ticket viewer",
                 ephemeral=True
@@ -259,7 +263,7 @@ class Tickets(commands.Cog):
             )
             return
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             content=f"✅ - Aucun ticket viewer dans la base de données\n"
                 f"✅ - Création d'un nouveau channel ticket viewer",
             ephemeral=True
@@ -296,6 +300,8 @@ class Tickets(commands.Cog):
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def close_channel_ticket(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
         results = self.db.get_ch_ticket(guild.id, get_all=True)
 
@@ -303,7 +309,7 @@ class Tickets(commands.Cog):
             channel = guild.get_channel(results.view_channel_id)
             if channel:
                 self.db.supress_ch_ticket(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
                     ephemeral=True
                 )
@@ -315,7 +321,7 @@ class Tickets(commands.Cog):
             else:
                 if results:
                     self.db.supress_ch_ticket(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                         f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
                         f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -334,7 +340,7 @@ class Tickets(commands.Cog):
                         self.db.supress_ch_ticket(result)
             return
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             content=f"❌ - Aucun channel a été trouver dans la base de données\n"
                 f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
                 f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -347,6 +353,8 @@ class Tickets(commands.Cog):
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def close_channel_application(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
         results = self.db.get_ch_application(guild.id, get_all=True)
 
@@ -354,7 +362,7 @@ class Tickets(commands.Cog):
             channel = guild.get_channel(results.view_channel_id)
             if channel:
                 self.db.supress_ch_application(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
                     ephemeral=True
                 )
@@ -366,7 +374,7 @@ class Tickets(commands.Cog):
             else:
                 if results:
                     self.db.supress_ch_application(results)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                             f"❌ - Aucun channel avec le Viewer Application a été trouver dans le serveur\n"
                             f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -385,7 +393,7 @@ class Tickets(commands.Cog):
                         self.db.supress_ch_application(result)
             return
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             content=f"❌ - Aucun channel a été trouver dans la base de données\n"
                     f"❌ - Aucun channel avec le Viewer Application a été trouver dans le serveur\n"
                     f"Si il existe vous pouvez le supprimer en toute sureté !",
@@ -400,6 +408,8 @@ class Tickets(commands.Cog):
     async def close_user_ticket(
             self, interaction: nextcord.Interaction, channel: nextcord.TextChannel
     ):
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
         result = self.db.get_open_ticket(guild.id, channel.id)
 
@@ -425,7 +435,7 @@ class Tickets(commands.Cog):
                         file=file_to_send
                     )
 
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Ticket ve bientot se fermer et être archiver!",
                     ephemeral=True
                 )
@@ -438,7 +448,7 @@ class Tickets(commands.Cog):
             else:
                 if result:
                     self.db.supress_ch_ticket(result)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     content=f"✅ - Suppression du ticket dans la base de données\n"
                         f"❌ - Aucun ticket ouvert dans le serveur\n"
                         f"❌ - Aucun archivage!\n"
@@ -448,7 +458,7 @@ class Tickets(commands.Cog):
                 return
 
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 content=f"❌ - Aucun ticket a été trouver dans la base de données\n"
                     f"❌ - Aucun ticket a été trouver dans le serveur\n"
                     f"❌ - Aucun archivage!\n"
