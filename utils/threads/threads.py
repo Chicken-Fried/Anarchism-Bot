@@ -1,6 +1,20 @@
 import nextcord
 import asyncio
+import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
+GUILD_SQB_SERVER_ID = os.getenv('GUILD_SQB_SERVER_ID')
+SQB_STAFF_ID = os.getenv('SQB_SERVER_STAFF_ROLE_ID')
+
+GUILD_COMMUNITY_SERVER_ID = os.getenv('COMMUNITY_SERVER_GUILD_ID')
+COMMUNITY_STAFF_ID = os.getenv('COMMUNITY_STAFF_ROLE_ID')
+
+ROLES_ID = {
+    int(GUILD_SQB_SERVER_ID): int(SQB_STAFF_ID),
+    int(GUILD_COMMUNITY_SERVER_ID): int(COMMUNITY_STAFF_ID)
+}
 
 async def create_admin_thread(channel: nextcord.TextChannel):
     """
@@ -8,36 +22,30 @@ async def create_admin_thread(channel: nextcord.TextChannel):
     Note : Nécessite un Boost Niveau 2 sur le serveur.
     """
     try:
-        # 1. Création du thread (Rapide)
+        # 1. Création du thread privé
         thread = await channel.create_thread(
             name="🔒 Staff-discussion",
             type=nextcord.ChannelType.private_thread
         )
 
-        # 2. On récupère UNIQUEMENT les membres avec la permission admin
-        # On utilise une liste de tâches pour ne pas attendre chaque membre l'un après l'autre
-        admin_members = [
-            member for member in channel.guild.members
-            if member.guild_permissions.administrator
-        ]
+        # 2. On récupère le rôle staff
+        guild_id = channel.guild.id
+        staff_role_id = ROLES_ID.get(guild_id)
 
-        if not admin_members:
-            await thread.send("⚠️ Aucun administrateur trouvé pour l'ajout automatique.")
-            return thread
+        if staff_role_id:
+            role = channel.guild.get_role(staff_role_id)
+            if not role:
+                return None
 
-        # 3. Utilisation de asyncio.gather pour lancer TOUTES les requêtes en même temps
-        # Au lieu d'attendre le membre 1, puis le 2, puis le 3...
-        # On lance toutes les demandes d'ajout simultanément.
-        tasks = [thread.add_user(member) for member in admin_members]
+        # 3. LA CLÉ : On modifie les permissions du thread pour ajouter le rôle d'un coup
+        # On autorise le rôle à voir le canal (view_channel=True)
+        await thread.set_permissions(role, view_channel=True, send_messages=True)
 
-        # return_exceptions=True permet de ne pas faire planter la boucle si un membre échoue
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # 4. On ping le rôle pour notifier tout le monde
+        await thread.send(f"🚨 {role.mention} ! Un nouveau thread de staff a été créé.")
 
-        await thread.send(f"✅ Thread sécurisé créé. Accès accordé à {len(admin_members)} administrateurs.")
         return thread
 
-    except nextcord.Forbidden:
-        print("Erreur : Le bot n'a pas la permission de créer des threads privés ou de gérer les membres.")
     except Exception as e:
-        print(f"Erreur lors de la création du thread : {e}")
+        print(f"Erreur : {e}")
         return None

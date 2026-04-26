@@ -178,12 +178,12 @@ class OpenTicket(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                staff_channel_id = result[0]
+                staff_id = result[0]
                 alert_channel_id = result[1]
 
                 # 2. Récupération des objets canaux
                 ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_channel(staff_channel_id)
+                ping_staff = guild.get_role(staff_id)
 
                 if ping_ch and ping_staff:
                     at_embeds = AlertTicketEmbed(
@@ -202,7 +202,7 @@ class OpenTicket(nextcord.ui.Button):
                     )
                 else:
                     print(
-                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"[Tickets Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
                         f"channel staff")
 
             data = Ticket(
@@ -250,12 +250,12 @@ class OpenTicket(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                staff_channel_id = result[0]
+                staff_id = result[0]
                 alert_channel_id = result[1]
 
                 # 2. Récupération des objets canaux
                 ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_channel(staff_channel_id)
+                ping_staff = guild.get_role(staff_id)
 
                 if ping_ch and ping_staff:
                     at_embeds = AlertTicketEmbed(
@@ -274,7 +274,7 @@ class OpenTicket(nextcord.ui.Button):
                     )
                 else:
                     print(
-                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"[Tickets Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
                         f"channel staff")
 
             data = Ticket(
