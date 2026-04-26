@@ -6,7 +6,7 @@ from typing import Literal
 class ErrorEmbed:
     title:           str
     description:     str | None = None
-    fields:          list[ErrorEmbedField] | None = None
+    fields:          list['ErrorEmbedField'] | None = None
     url:             str | None = None
     type:            Literal["rich", "image", "video", "gifv", "article", "link"] = "rich"
     color:           Color = Color.dark_red()
