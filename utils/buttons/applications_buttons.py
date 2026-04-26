@@ -23,8 +23,8 @@ COMMUNITY_STAFF_ID = os.getenv('COMMUNITY_STAFF_ROLE_ID')
 COMMUNITY_STAFF_CHANNEL_ID = os.getenv('COMMUNITY_STAFF_CHANNEL_ID')
 
 ROLES_ID = {
-    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
-    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
+    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
+    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
 }
 
 
@@ -178,7 +178,7 @@ class OpenApplication(nextcord.ui.Button):
             }
 
             new_channel = await guild.create_text_channel(
-                name=f"📥-candidature-{user.name}",
+                name=f"✉️-candidature-{user.name}",
                 overwrites=overwrites,
                 category=category
             )
@@ -204,20 +204,33 @@ class OpenApplication(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                ping_ch = guild.get_channel(result[1])
-                ping_staff = guild.get_channel(result[0])
+                staff_channel_id = result[0]
+                alert_channel_id = result[1]
 
-                at_embeds = AlertTicketEmbed(
-                    title=f"🧾 | Un utilisateur à ouvert une candidature | <@{new_channel.id}> !",
-                    description=f"Hésitez pas à finaliser sa candidature et à le recruter dès que vous êtes disponible !\n"
-                                f"<@{ping_staff}>",
-                )
+                # 2. Récupération des objets canaux
+                ping_ch = guild.get_channel(alert_channel_id)
+                ping_staff = guild.get_channel(staff_channel_id)
 
-                await ping_ch.send(
-                    embed=alert_ticket_embed(
-                        at_embed=at_embeds
+                if ping_ch and ping_staff:
+                    at_embeds = AlertTicketEmbed(
+                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
+                        description=(
+                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
+                            f"dès que vous êtes disponible !\n"
+                            f"{ping_staff.mention}"
+                        ),
                     )
-                )
+
+                    await ping_ch.send(
+                        embed=alert_ticket_embed(
+                            at_embed=at_embeds
+                        )
+                    )
+                else:
+                    print(
+                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"channel staff")
+
 
             data = Ticket(
                 guild_id=guild.id,
@@ -234,7 +247,7 @@ class OpenApplication(nextcord.ui.Button):
             view.update_components(interaction, data)
 
             await new_channel.send(
-                embeds=view.embd_choice_reason(),
+                embeds=view.embd_response(data),
                 view=view
             )
 
@@ -257,7 +270,7 @@ class OpenApplication(nextcord.ui.Button):
             }
 
             new_channel = await guild.create_text_channel(
-                name=f"📥-candidature-{user.name}",
+                name=f"️️✉️️-candidature-{user.name}",
                 overwrites=overwrites,
                 category=category
             )
@@ -283,20 +296,33 @@ class OpenApplication(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                ping_ch = guild.get_channel(result[1])
-                ping_staff = guild.get_channel(result[0])
+                staff_channel_id = result[0]
+                alert_channel_id = result[1]
 
-                at_embeds = AlertTicketEmbed(
-                    title=f"🧾 | Un utilisateur à ouvert une candidature | <@{new_channel.id}> !",
-                    description=f"Hésitez pas à finaliser sa candidature et à le recruter dès que vous êtes disponible !\n"
-                                f"<@{ping_staff}>",
-                )
+                # 2. Récupération des objets canaux
+                ping_ch = guild.get_channel(alert_channel_id)
+                ping_staff = guild.get_channel(staff_channel_id)
 
-                await ping_ch.send(
-                    embed=alert_ticket_embed(
-                        at_embed=at_embeds
+                if ping_ch and ping_staff:
+                    at_embeds = AlertTicketEmbed(
+                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
+                        description=(
+                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
+                            f"dès que vous êtes disponible !\n"
+                            f"{ping_staff.mention}"
+                        ),
                     )
-                )
+
+                    await ping_ch.send(
+                        embed=alert_ticket_embed(
+                            at_embed=at_embeds
+                        )
+                    )
+                else:
+                    print(
+                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"channel staff")
+
 
             data = Ticket(
                 guild_id=guild.id,
@@ -317,7 +343,8 @@ class OpenApplication(nextcord.ui.Button):
                 view=view
             )
 
-            print(f"[Applications Views]   Ouverture d'une candidature | Création d'une candidature pour l'utilisateur {user.name}")
+            print(f"[Applications Views]   Ouverture d'une candidature | Création d'une candidature pour l'utilisateur "
+                  f"{user.name}")
 
             await interaction.followup.send(
                 f"Ta candidature a été créé : {new_channel.mention}",
@@ -361,7 +388,9 @@ class CloseTicket(nextcord.ui.Button):
         view = self.view
 
         ticket = self.db.get_open_ticket(
-            guild_id=interaction.guild.id, channel_id=interaction.channel.id)
+            guild_id=interaction.guild.id,
+            channel_id=interaction.channel.id
+        )
 
         print(f"CloseButton      :{ticket}\nGuild_id: {interaction.guild.id} | Channel_id: {interaction.channel.id}")
 
@@ -376,11 +405,14 @@ class CloseTicket(nextcord.ui.Button):
 
         ticket.step = 1
 
+        for item in view.children:
+            item.disabled = True
+
         view.update_components(interaction, ticket)
 
         print(f"[Applications Views]   Fermeture d'une candidature | Par l'utilisateur {user.name}")
 
-        await interaction.followup.send(
+        await interaction.edit_original_message(
             embeds=view.embd_confirmation(),
             view=view
         )
@@ -417,20 +449,20 @@ class YesButton(nextcord.ui.Button):
         channel = guild.get_channel(ticket.channel_id)
         voice_channel = guild.get_channel(ticket.voice_channel_id)
 
-        for item in view.children:
-            item.disabled = True
-
-        await interaction.followup.send(
+        await interaction.edit_original_message(
             embeds=view.embd_y_confirmation(),
             view=view
         )
 
+        for item in view.children:
+            item.disabled = True
+
         if not voice_channel:
             print(f"[Applications Views]   Confirmation de fermeture de la candidature => Par l'utilisateur: {user.name}"
-                  f" | Channel: 📥-candidature-{user.name}")
+                  f" | Channel: ️✉️-candidature-{user.name}")
         else:
             print(f"[Applications Views]   Confirmation de fermeture de la candidature => Par l'utilisateur: {user.name}"
-                  f" | Salon textuel: 📥-candidature-{user.name} | Vocal: Recrutement | {user.name}")
+                  f" | Salon textuel: ✉️-candidature-{user.name} | Vocal: Recrutement | {user.name}")
 
         file_path = await save_channel_to_json(channel)
 
@@ -482,19 +514,19 @@ class NoButton(nextcord.ui.Button):
 
         channel = guild.get_channel(ticket.channel_id)
 
-        for item in view.children:
-            item.disabled = True
-
-        ticket.step = 2
+        ticket.step = 0
 
         self.db.update_ticket(ticket)
 
-        view.update_components(interaction)
+        for item in view.children:
+            item.disabled = True
+
+        view.update_components(interaction, ticket)
 
         print(f"[Applications Views]   Annulation de la fermeture de la candidature => Par l'utilisateur: {user.name}"
               f" | Channel: {channel.name}")
 
-        await interaction.followup.send(
-            embeds=view.embd_response_reason(ticket),
+        await interaction.edit_original_message(
+            embeds=view.embd_response(ticket),
             view=view
         )

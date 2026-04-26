@@ -436,7 +436,7 @@ class Tickets(commands.Cog):
                     )
 
                 await interaction.followup.send(
-                    content=f"✅ - Ticket ve bientot se fermer et être archiver!",
+                    content=f"✅ - Ticket va bientot se fermer et être archiver!",
                     ephemeral=True
                 )
                 self.db.supress_ch_ticket(result)
@@ -444,6 +444,12 @@ class Tickets(commands.Cog):
                 await asyncio.sleep(10)
 
                 await target_ch.delete()
+
+                if result.voice_channel_id:
+                    target_voice_ch = guild.get_channel(result.voice_channel_id)
+
+                    if target_voice_ch:
+                        await target_voice_ch.delete()
                 return
             else:
                 if result:

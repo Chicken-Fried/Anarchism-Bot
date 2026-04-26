@@ -24,9 +24,10 @@ COMMUNITY_STAFF_ID = os.getenv('COMMUNITY_STAFF_ROLE_ID')
 COMMUNITY_STAFF_CHANNEL_ID = os.getenv('COMMUNITY_STAFF_CHANNEL_ID')
 
 ROLES_ID = {
-    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
-    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
+    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
+    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
 }
+
 
 # ── BUTTON OPEN TICKET ───────────────────────────────────────────────
 
@@ -177,20 +178,32 @@ class OpenTicket(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                ping_ch = guild.get_channel(result[1])
-                ping_staff = guild.get_channel(result[0])
+                staff_channel_id = result[0]
+                alert_channel_id = result[1]
 
-                at_embeds = AlertTicketEmbed(
-                    title=f"🧾 | Un utilisateur à re-ouvert un ticket | <@{new_channel.id}> !",
-                    description=f"Hésitez pas à aider l'utilisateur le plus vite possible !\n"
-                                f"<@{ping_staff}>",
-                )
+                # 2. Récupération des objets canaux
+                ping_ch = guild.get_channel(alert_channel_id)
+                ping_staff = guild.get_channel(staff_channel_id)
 
-                await ping_ch.send(
-                    embed=alert_ticket_embed(
-                        at_embed=at_embeds
+                if ping_ch and ping_staff:
+                    at_embeds = AlertTicketEmbed(
+                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
+                        description=(
+                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
+                            f"dès que vous êtes disponible !\n"
+                            f"{ping_staff.mention}"
+                        ),
                     )
-                )
+
+                    await ping_ch.send(
+                        embed=alert_ticket_embed(
+                            at_embed=at_embeds
+                        )
+                    )
+                else:
+                    print(
+                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"channel staff")
 
             data = Ticket(
                 guild_id=guild.id,
@@ -237,20 +250,32 @@ class OpenTicket(nextcord.ui.Button):
             result = ROLES_ID.get(guild.id)
 
             if result:
-                ping_ch = guild.get_channel(result[1])
-                ping_staff = guild.get_channel(result[0])
+                staff_channel_id = result[0]
+                alert_channel_id = result[1]
 
-                at_embeds = AlertTicketEmbed(
-                    title=f"🧾 | Un utilisateur à re-ouvert un ticket | <@{new_channel.id}> !",
-                    description=f"Hésitez pas à aider l'utilisateur le plus vite possible !\n"
-                                f"<@{ping_staff}>",
-                )
+                # 2. Récupération des objets canaux
+                ping_ch = guild.get_channel(alert_channel_id)
+                ping_staff = guild.get_channel(staff_channel_id)
 
-                await ping_ch.send(
-                    embed=alert_ticket_embed(
-                        at_embed=at_embeds
+                if ping_ch and ping_staff:
+                    at_embeds = AlertTicketEmbed(
+                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
+                        description=(
+                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
+                            f"dès que vous êtes disponible !\n"
+                            f"{ping_staff.mention}"
+                        ),
                     )
-                )
+
+                    await ping_ch.send(
+                        embed=alert_ticket_embed(
+                            at_embed=at_embeds
+                        )
+                    )
+                else:
+                    print(
+                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
+                        f"channel staff")
 
             data = Ticket(
                 guild_id=guild.id,
@@ -323,13 +348,16 @@ class CloseTicket(nextcord.ui.Button):
 
         ticket.step = 2
 
+        for item in view.children:
+            item.disabled = True
+
         view.update_components(interaction, ticket)
 
         print(f"[Tickets Views]   Fermeture d'un ticket | Par l'utilisateur {user.name}")
 
         #self.db.supress_ticket(ticket)
 
-        await interaction.followup.send(
+        await interaction.edit_original_message(
             embeds=view.embd_confirmation(),
             view=view
         )
@@ -818,13 +846,13 @@ class YesButton(nextcord.ui.Button):
         channel = guild.get_channel(ticket.channel_id)
         voice_channel = guild.get_channel(ticket.voice_channel_id)
 
-        for item in view.children:
-            item.disabled = True
-
-        await interaction.followup.send(
+        await interaction.edit_original_message(
             embeds=view.embd_y_confirmation(),
             view=view
         )
+
+        for item in view.children:
+            item.disabled = True
 
         if not voice_channel:
             print(f"[Tickets Views]   Confirmation de fermeture du ticket => Par l'utilisateur: {user.name}"
@@ -889,12 +917,15 @@ class NoButton(nextcord.ui.Button):
 
         self.db.update_ticket(ticket)
 
-        view.update_components(interaction)
+        for item in view.children:
+            item.disabled = True
+
+        view.update_components(interaction, ticket)
 
         print(f"[Tickets Views]   Annulation de la fermeture du ticket => Par l'utilisateur: {user.name}"
               f" | Channel: {channel.name}")
 
-        await interaction.followup.send(
+        await interaction.edit_original_message(
             embeds=view.embd_response_reason(ticket),
             view=view
         )
