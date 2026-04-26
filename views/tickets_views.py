@@ -1,6 +1,6 @@
 import nextcord
-from utils.buttons.tickets_buttons import (YesButton, NoButton, OpenTicket, CloseTicket, RecruitementTicket,
-                                           IssuesTicket, SuggestTicket, AbsentTicket, UrlFormularyButton, BackTicket)
+from utils.buttons.tickets_buttons import (YesButton, NoButton, OpenTicket, CloseTicket,
+                                           IssuesTicket, SuggestTicket, AbsentTicket, BackTicket)
 from database.db_tickets import TicketsDB, Ticket
 
 class OpenTicketsView(nextcord.ui.View):
@@ -12,7 +12,6 @@ class OpenTicketsView(nextcord.ui.View):
     ]
 
     TITLES = [
-        "Demande de recruitement",
         "Introduction de suggestion",
         "Faire part d'un problème",
         "Introduction d'une absence"
@@ -33,7 +32,6 @@ class OpenTicketsView(nextcord.ui.View):
         step = self.STEPS[ticket.step]
 
         if step == "choices_ticket":
-            self.add_item(RecruitementTicket(db=self.db))
             self.add_item(SuggestTicket(db=self.db))
             self.add_item(IssuesTicket(db=self.db))
             self.add_item(AbsentTicket(db=self.db))
@@ -173,95 +171,7 @@ class OpenTicketsView(nextcord.ui.View):
 
             return [embed]
 
-        if reason_idx == 0:
-            self.add_item(UrlFormularyButton())
-            embed1 = nextcord.Embed(
-                title=f"{title} | {member}",
-                description="Bienvenue à la PYTHON, on t'invite à remplir le formulaire, disponible depuis "
-                            "l'en-tete de l'embed ou via le bouton - Apposer la candidature",
-                url="https://docs.google.com/forms/d/e/1FAIpQLSe78vzCSrXA4c_t556UmeMJOA-ajl9-h1Lwrc01C7PgOVkmkA/viewform",
-                color=nextcord.Color.dark_blue()
-            )
-
-            embed2 = nextcord.Embed(
-                title=f"La PYTHON 🐍 est un escadron francophone soudé, dynamique, et orienté coordination.",
-                description=f"",
-                color=nextcord.Color.dark_blue()
-            )
-
-            embed2.add_field(
-                name="🎯 | Notre objectif:",
-                value="🕹️ Jouer inteligemment, progresser ensemble et dominer en batailles d’escadron !\n"
-                      "⚔️ Coordination, progression et top classement SQB à terme\n"
-                      "✅ Bonus d’EXP escadron fréquent [véhicules d’escadron]\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="👁️ | Notre vision:",
-                value="La synergie fait la force.",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="📋 | Chez la PYTHON, on privilégie:",
-                value="👥 Le jeu d’équipe structuré\n"
-                      "🗣️ Une bonne ambiance en vocal\n"
-                      "🫡 Le respect et l’entraide comme fondamentaux\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="💬 | Notre discord en bref:",
-                value="🐍 Petite communauté volontaire, active & soudée\n"
-                      "🎙️ Micro et vocal actifs pendant les SQB\n"
-                      "🛡️ Entraide pour progresser, dans la bonne humeur\n"
-                      "🔥 Events réguliers (SQB, training)\n"
-                      "🎖️ Esprit semi-compétitif\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="🐍 | Nos attentes dans l'escadron PYTHON:",
-                value="👥 Participation régulière en SQB attendue\n"
-                      "🎮 Parfait pour les joueurs motivés qui veulent jouer en équipe\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="🔎 | Le profil idéal:",
-                value="👥 Joueur qui a envie de jouer en escouade\n"
-                      "🗣️ A l’aise en vocal / respectueux / réactif\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="📊 | Nos critères pour candidater:",
-                value="2️⃣ Avoir au minimum 2 nations avec RANG V débloqués (Tank ou Avion)\n"
-                      "🥇 Être actif au moins 1300 Points d'activité en SQB pour ta première saison\n"
-                      "👥 S’engager à respecter l’ambiance du groupe\n",
-                inline=False
-            )
-
-            embed2.add_field(
-                name="📩 | Prêt à rentrer dans la tanière ?",
-                value="**Je t'invite à cliquer sur le bouton, 'Apposer la candidature' pour poursuivre**\n"
-                      "Une question ? Une hésitation ? Passe dire bonjour, on ne mord pas (enfin… pas toujours 🐍)",
-                inline=False
-            )
-
-            embed3 = nextcord.Embed(
-                title=f"Système de sauvegarde/fermeture de ticket",
-                description="Fermer le ticket - Enregistre automatiquement + Ferme le ticket"
-                            "\nAnnuler - Annule le ticket",
-                color=nextcord.Color.dark_red()
-            )
-
-            embed3.set_footer(text="PYTHON - EMPIRE GALACTIQUE")
-
-            return [embed1, embed2]
-
-        elif reason_idx == 3:
+        if reason_idx == 2:
             self.add_item(AbsentTicket(db=self.db))
 
             embed1 = nextcord.Embed(

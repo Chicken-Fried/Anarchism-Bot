@@ -5,6 +5,7 @@ from nextcord.ext import commands
 from nextcord import PermissionOverwrite
 
 from views.tickets_views import OpenTicketsView
+from views.applications_views import OpenApplicationsView
 from utils.tickets_log import save_channel_to_json
 from database.models.tickets_class import Ticket, TicketViewChannels
 
@@ -43,6 +44,128 @@ class Tickets(commands.Cog):
             view=view,
             ephemeral=False
         )
+
+    @nextcord.slash_command(
+        name="add-application-channel",
+        description="Ajoute le channel dédié aux candidatures",
+        default_member_permissions=nextcord.Permissions(administrator=True)
+    )
+    async def create_channel_application(self, interaction: nextcord.Interaction):
+        guild = interaction.guild
+        view = OpenApplicationsView(db=self.db)
+
+        results = self.db.get_ch_application(guild.id, get_all=True)
+
+        if isinstance(results, TicketViewChannels):
+            channel = guild.get_channel(results.view_channel_id)
+            if channel:
+                await interaction.response.send_message(
+                    content=f"❌ - Un channel application viewer existe déjà, le voici => {channel.mention}",
+                    ephemeral=True
+                )
+            else:
+                if results:
+                    self.db.supress_ch_application(results)
+                await interaction.response.send_message(
+                    content=f"✅ - Suppression du channel dans la base de données\n"
+                            f"✅ - Création d'un nouveau channel application viewer\n"
+                            f"Si il existe vous pouvez le supprimer en toute sureté !",
+                    ephemeral=True
+                )
+
+                overwrites = {
+                    guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                                            read_message_history=True),
+                    guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+                }
+
+                channel = await interaction.guild.create_text_channel(
+                    name=f"📋-candidature",
+                    overwrites=overwrites,
+                    position=0
+                )
+
+                data = TicketViewChannels(
+                    guild_id=interaction.guild.id,
+                    view_channel_id=channel.id
+                )
+                self.db.insert_ch_application(data)
+
+                await channel.send(
+                    embeds=view.embd_open_ticket(),
+                    view=view
+                )
+                return
+
+        if isinstance(results, list):
+            for result in results:
+                channel = guild.get_channel(results.view_channel_id)
+                if channel:
+                    await channel.delete()
+                    self.db.supress_ch_application(result)
+                else:
+                    if result:
+                        self.db.supress_ch_application(result)
+
+            await interaction.response.send_message(
+                content=f"✅ - Suppression des applications viewer dans la base de données\n"
+                        f"✅ - Création d'un nouveau channel application viewer",
+                ephemeral=True
+            )
+
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                                        read_message_history=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
+            channel = await interaction.guild.create_text_channel(
+                name=f"📥-ouvrir-un-ticket",
+                overwrites=overwrites,
+                position=0
+            )
+
+            data = TicketViewChannels(
+                guild_id=interaction.guild.id,
+                view_channel_id=channel.id
+            )
+            self.db.insert_ch_application(data)
+
+            await channel.send(
+                embeds=view.embd_open_application(),
+                view=view
+            )
+            return
+
+        await interaction.response.send_message(
+            content=f"✅ - Aucun ticket viewer dans la base de données\n"
+                    f"✅ - Création d'un nouveau channel ticket viewer",
+            ephemeral=True
+        )
+
+        overwrites = {
+            guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                                                    read_message_history=True),
+            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+
+        channel = await interaction.guild.create_text_channel(
+            name=f"📥-ouvrir-un-ticket",
+            overwrites=overwrites,
+            position=0
+        )
+
+        data = TicketViewChannels(
+            guild_id=interaction.guild.id,
+            view_channel_id=channel.id
+        )
+        self.db.insert_ch_application(data)
+
+        await channel.send(
+            embeds=view.embd_open_application(),
+            view=view
+        )
+        return
 
     @nextcord.slash_command(
         name="add-ticket-channel",
@@ -219,8 +342,59 @@ class Tickets(commands.Cog):
         )
 
     @nextcord.slash_command(
+        name="close-viewer-application",
+        description="Ferme le salon textuel où se trouve l'afficheur d'ouverture de candidature",
+        default_member_permissions=nextcord.Permissions(administrator=True)
+    )
+    async def close_channel_application(self, interaction: nextcord.Interaction):
+        guild = interaction.guild
+        results = self.db.get_ch_application(guild.id, get_all=True)
+
+        if isinstance(results, TicketViewChannels):
+            channel = guild.get_channel(results.view_channel_id)
+            if channel:
+                self.db.supress_ch_application(results)
+                await interaction.response.send_message(
+                    content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
+                    ephemeral=True
+                )
+
+                await asyncio.sleep(10)
+
+                await channel.delete()
+                return
+            else:
+                if results:
+                    self.db.supress_ch_application(results)
+                await interaction.response.send_message(
+                    content=f"✅ - Suppression du channel dans la base de données\n"
+                            f"❌ - Aucun channel avec le Viewer Application a été trouver dans le serveur\n"
+                            f"Si il existe vous pouvez le supprimer en toute sureté !",
+                    ephemeral=True
+                )
+                return
+
+        if isinstance(results, list):
+            for result in results:
+                channel = guild.get_channel(result.view_channel_id)
+                if channel:
+                    await channel.delete()
+                    self.db.supress_ch_application(result)
+                else:
+                    if result:
+                        self.db.supress_ch_application(result)
+            return
+
+        await interaction.response.send_message(
+            content=f"❌ - Aucun channel a été trouver dans la base de données\n"
+                    f"❌ - Aucun channel avec le Viewer Application a été trouver dans le serveur\n"
+                    f"Si il existe vous pouvez le supprimer en toute sureté !",
+            ephemeral=True
+        )
+
+    @nextcord.slash_command(
         name="close-ticket-of-user",
-        description="Ferme le ticket d'un utilisateur",
+        description="Ferme le ticket/la candidature d'un utilisateur",
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def close_user_ticket(
@@ -246,7 +420,7 @@ class Tickets(commands.Cog):
                 if log_channel and file_path:
                     file_to_send = nextcord.File(file_path)
                     await log_channel.send(
-                        content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {result.user_name}\n"
+                        content=f"📁 **Archive du ticket **\nUtilisateur: {result.user_name}\n"
                                 f"Canal: {target_ch.name}",
                         file=file_to_send
                     )

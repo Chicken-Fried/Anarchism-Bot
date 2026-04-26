@@ -23,10 +23,16 @@ from wrpl.poller    import WTPoller
 db_replays     = ReplayDB()
 bot.db_replays = db_replays
 poller        = WTPoller(db=db_replays)
+
 # ─────────────────────────────────────────────────────────────────────────
 from database.db_tickets import TicketsDB
 db_tickets     = TicketsDB()
 bot.db_tickets = db_tickets
+
+# ─────────────────────────────────────────────────────────────────────────
+from database.db_informations import InformationDB
+db_infos     = InformationDB()
+bot.db_infos = db_infos
 
 @bot.command()
 @commands.is_owner()
