@@ -439,7 +439,11 @@ class Tickets(commands.Cog):
                     content=f"✅ - Ticket va bientot se fermer et être archiver!",
                     ephemeral=True
                 )
-                self.db.supress_ch_ticket(result)
+
+                if result.is_application:
+                    self.db.supress_ch_application(result)
+                else:
+                    self.db.supress_ch_ticket(result)
 
                 await asyncio.sleep(10)
 

@@ -7,7 +7,6 @@ from database.db_tickets import TicketsDB
 from utils.tickets_log import save_channel_to_json
 from utils.inputs.tickets_inputs import AbsentModal
 from database.models.tickets_class import Ticket, TicketGuilds, TicketViewChannels
-from embed.tickets_embeds import alert_ticket_embed, AlertTicketEmbed
 from utils.threads.threads import create_admin_thread
 
 from dotenv import load_dotenv
@@ -22,11 +21,6 @@ SQB_STAFF_CHANNEL_ID = os.getenv('SQB_SERVER_STAFF_CHANNEL_ID')
 GUILD_COMMUNITY_SERVER_ID = os.getenv('COMMUNITY_SERVER_GUILD_ID')
 COMMUNITY_STAFF_ID = os.getenv('COMMUNITY_STAFF_ROLE_ID')
 COMMUNITY_STAFF_CHANNEL_ID = os.getenv('COMMUNITY_STAFF_CHANNEL_ID')
-
-ROLES_ID = {
-    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
-    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
-}
 
 
 # ── BUTTON OPEN TICKET ───────────────────────────────────────────────
@@ -175,35 +169,6 @@ class OpenTicket(nextcord.ui.Button):
                 channel=new_channel
             )
 
-            result = ROLES_ID.get(guild.id)
-
-            if result:
-                staff_id = result[0]
-                alert_channel_id = result[1]
-
-                # 2. Récupération des objets canaux
-                ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_role(staff_id)
-
-                if ping_ch and ping_staff:
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
-                        description=(
-                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
-                            f"dès que vous êtes disponible !\n"
-                            f"{ping_staff.mention}"
-                        ),
-                    )
-
-                    await ping_ch.send(
-                        embed=alert_ticket_embed(
-                            at_embed=at_embeds
-                        )
-                    )
-                else:
-                    print(
-                        f"[Tickets Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
-                        f"channel staff")
 
             data = Ticket(
                 guild_id=guild.id,
@@ -246,36 +211,6 @@ class OpenTicket(nextcord.ui.Button):
                 overwrites=overwrites,
                 category=category
             )
-
-            result = ROLES_ID.get(guild.id)
-
-            if result:
-                staff_id = result[0]
-                alert_channel_id = result[1]
-
-                # 2. Récupération des objets canaux
-                ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_role(staff_id)
-
-                if ping_ch and ping_staff:
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
-                        description=(
-                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
-                            f"dès que vous êtes disponible !\n"
-                            f"{ping_staff.mention}"
-                        ),
-                    )
-
-                    await ping_ch.send(
-                        embed=alert_ticket_embed(
-                            at_embed=at_embeds
-                        )
-                    )
-                else:
-                    print(
-                        f"[Tickets Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
-                        f"channel staff")
 
             data = Ticket(
                 guild_id=guild.id,
@@ -447,19 +382,6 @@ class BackTicket(nextcord.ui.Button):
                 channel=new_channel
             )
 
-            result = ROLES_ID.get(guild.id)
-
-            if result:
-                ping_ch = guild.get_channel(result[1])
-                ping_staff = guild.get_channel(result[0])
-
-                if ping_ch and ping_staff:
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un ticket a été réinitialisé | <@{new_channel.id}> !",
-                        description=f"L'utilisateur a fait un retour en arrière.\n<@{ping_staff}>",
-                    )
-                    await ping_ch.send(embed=alert_ticket_embed(at_embed=at_embeds))
-
             if voice_channel:
                 try:
                     await voice_channel.delete()
@@ -564,24 +486,6 @@ class CancelTicket(nextcord.ui.Button):
                     channel=new_channel
                 )
 
-                result = ROLES_ID.get(guild.id)
-
-                if result:
-                    ping_ch = guild.get_channel(result[1])
-                    ping_staff = guild.get_channel(result[0])
-
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un utilisateur à re-ouvert un ticket | <@{new_channel.id}> !",
-                        description=f"Hésitez pas à aider l'utilisateur le plus vite possible !\n"
-                                    f"<@{ping_staff}>",
-                    )
-
-                    await ping_ch.send(
-                        embed=alert_ticket_embed(
-                            at_embed=at_embeds
-                        )
-                    )
-
                 if voice_channel:
                     await voice_channel.delete()
 
@@ -635,24 +539,6 @@ class CancelTicket(nextcord.ui.Button):
         await create_admin_thread(
             channel=new_channel
         )
-
-        result = ROLES_ID.get(guild.id)
-
-        if result:
-            ping_ch = guild.get_channel(result[1])
-            ping_staff = guild.get_channel(result[0])
-
-            at_embeds = AlertTicketEmbed(
-                title=f"🧾 | Un utilisateur à re-ouvert un ticket | <@{new_channel.id}> !",
-                description=f"Hésitez pas à aider l'utilisateur le plus vite possible !\n"
-                            f"<@{ping_staff}>",
-            )
-
-            await ping_ch.send(
-                embed=alert_ticket_embed(
-                    at_embed=at_embeds
-                )
-            )
 
         self.db.supress_ticket(ticket)
 

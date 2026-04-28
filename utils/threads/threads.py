@@ -2,6 +2,8 @@ import nextcord
 import asyncio
 import os
 
+from embed.tickets_embeds import alert_ticket_embed, AlertTicketEmbed
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -37,12 +39,20 @@ async def create_admin_thread(channel: nextcord.TextChannel):
             if not role:
                 return None
 
-        # 3. LA CLÉ : On modifie les permissions du thread pour ajouter le rôle d'un coup
-        # On autorise le rôle à voir le canal (view_channel=True)
-        await thread.set_permissions(role, view_channel=True, send_messages=True)
+            at_embeds = AlertTicketEmbed(
+                title=f"🧾 | Un utilisateur a ouvert une candidature !",
+                description=(
+                    f"N'hésitez pas à finaliser sa candidature et à le recruter "
+                    f"dès que vous êtes disponible !\n"
+                ),
+            )
 
-        # 4. On ping le rôle pour notifier tout le monde
-        await thread.send(f"🚨 {role.mention} ! Un nouveau thread de staff a été créé.")
+            await thread.send(
+                content=f"{role.mention}",
+                embed=alert_ticket_embed(
+                            at_embed=at_embeds
+                        )
+            )
 
         return thread
 
