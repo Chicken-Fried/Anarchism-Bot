@@ -706,7 +706,7 @@ class Tickets(commands.Cog):
         return
 
     @nextcord.slash_command(
-        name="open-ticket-or-application",
+        name="ticket-or-application",
         description="Ouvre le ticket/la candidature pour l'utilisateur"
     )
     async def open_ticket(
