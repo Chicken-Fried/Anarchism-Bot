@@ -10,6 +10,8 @@ from nextcord.ext import commands
 from core.config import *
 
 from views.tickets_views import OpenTicketsView
+from views.applications_views import OpenApplicationsView
+from views.thread_views import ThreadView
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -45,10 +47,12 @@ async def sync(ctx):
 async def on_ready():
     #await bot.sync_all_application_commands()
     bot.add_view(OpenTicketsView(db=bot.db_tickets))
+    bot.add_view(OpenApplicationsView(db=bot.db_tickets))
+    bot.add_view(ThreadView())
     print(f'{bot.user.name} est en ligne!')
 
     # ── Démarrage du poller SQB ───────────────────────────────────────────
-    try:
+    """try:
         await poller.start()
         bot.loop.create_task(
             poller.poll_loop(interval_seconds=120),
@@ -57,7 +61,7 @@ async def on_ready():
         print("Poller SQB démarré.")
     except Exception as e:
         print(f"Poller SQB non démarré : {e}")
-        print("Lance 'python wrpl/setup_session.py' pour initialiser la session WT.")
+        print("Lance 'python wrpl/setup_session.py' pour initialiser la session WT.")"""
     # ─────────────────────────────────────────────────────────────────────
 
 
@@ -83,7 +87,7 @@ async def on_close():
     print(f"{bot.user.name} s'est éteint!")
 
     # ── Arrêt propre du poller ────────────────────────────────────────────
-    await poller.stop()
+    #await poller.stop()
     # ─────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
