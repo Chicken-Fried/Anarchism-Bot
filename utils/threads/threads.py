@@ -3,6 +3,7 @@ import asyncio
 import os
 
 from embed.tickets_embeds import alert_ticket_embed, AlertTicketEmbed
+from views.thread_views import ThreadView
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,6 +24,8 @@ async def create_admin_thread(channel: nextcord.TextChannel):
     Crée un thread privé et ajoute tous les membres ayant le rôle Admin.
     Note : Nécessite un Boost Niveau 2 sur le serveur.
     """
+    view = ThreadView()
+
     try:
         # 1. Création du thread privé
         thread = await channel.create_thread(
@@ -51,7 +54,8 @@ async def create_admin_thread(channel: nextcord.TextChannel):
                 content=f"{role.mention}",
                 embed=alert_ticket_embed(
                             at_embed=at_embeds
-                        )
+                        ),
+                view=view
             )
 
         return thread

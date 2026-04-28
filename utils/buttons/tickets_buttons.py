@@ -41,38 +41,36 @@ class OpenTicket(nextcord.ui.Button):
 
         # Condition 1 : Si la catégorie = TICKETS = existe, alors on la maintient
         cat_results = self.db.get_cat_ticket(interaction.guild_id, get_all=True)
-
-        print(f"CAT RESULTS:    {cat_results}")
         category = None
 
-        if isinstance(cat_results, TicketGuilds):
-            category = guild.get_channel(cat_results.category_id)
+        match cat_results:
+            case TicketGuilds() as single_config:
+                category = guild.get_channel(single_config.category_id)
+                if category:
+                    print("[Applications Views]   Ouverture d'un ticket | Catégorie existante trouvée.")
+                else:
+                    # Si la DB dit qu'elle existe mais que le canal a été supprimé manuellement sur Discord
+                    cat_results = None  # On force le passage au cas de création (cas par défaut)
 
-            if category:
-                print(f"[Tickets Views]   Ouverture d'un ticket | "
-                      f"Catégorie déjà existante dans la base de données")
+            case list() as cat_list if len(cat_list) > 0:
+                print(f"[Tickets Views] Nettoyage de {len(cat_list)} anciennes catégories...")
 
-        # Condition 2 : Si les catégories Ticket existent, on va tous les supprimer pour en créer qu'une
-        elif isinstance(cat_results, list):
-            i = 0
-            for cat in cat_results[:]:
-                category = guild.get_channel(cat.category_id)
-                i += 1
-                if category is None:
-                    self.db.supress_cat_ticket(cat)
-                    cat_results.remove(cat)
-                    continue
+                for config in cat_list[:]:  # On itère sur une copie pour pouvoir supprimer sans erreur d'index
+                    channel = guild.get_channel(config.category_id)
+                    if channel:
+                        await channel.delete()
+                    self.db.supress_cat_ticket(config)
 
-                await category.delete()
-                self.db.supress_cat_ticket(cat)
+                # Après le nettoyage, on passe à la création (on laisse tomber vers le cas par défaut via une exception ou en réinitialisant cat_results)
+                cat_results = None
 
-            print(f"[Tickets Views]   Ouverture d'un ticket | "
-                  f"Suppression de l'ensemble des catégories ouverte dans la meme guild - Nombre: {i}")
+            case _:
+                cat_results = None
 
+            # Condition 3 : Si la catégorie Ticket n'existe pas, alors on le crée
+        if cat_results is None:
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
-                                          read_message_history=True),
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
             }
 
@@ -88,35 +86,10 @@ class OpenTicket(nextcord.ui.Button):
             )
             self.db.insert_cat_ticket(data)
 
-            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'une catégorie {category.name}")
-
-        # Condition 3 : Si la catégorie Ticket n'existe pas, alors on le crée
-        if cat_results is None or category is None:
-            overwrites = {
-                guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
-                                          read_message_history=True),
-                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-            }
-
-            category = await guild.create_category(
-                name="= TICKETS =",
-                overwrites=overwrites,
-                position=0
-            )
-
-            data = TicketGuilds(
-                guild_id=guild.id,
-                category_id=category.id
-            )
-            self.db.insert_cat_ticket(data)
-
-            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'une catégorie {category.name}")
-
-
+            print(f"[Tickets Views]   Ouverture d'une candidature | Création d'une catégorie {category.name}")
 
         channel_results = self.db.get_tickets(interaction.guild_id, interaction.user.id, get_all=True)
-        channel = None
+        needs_creation = True
 
         # Condition 4 : Si le ticket de l'utilisateur existe, alors on la maintient
         if isinstance(channel_results, Ticket):
@@ -130,28 +103,35 @@ class OpenTicket(nextcord.ui.Button):
 
                 print(f"[Tickets Views]   Ouverture d'un ticket | "
                       f"Ticket déjà existant dans la base de données")
+                return
 
+        match channel_results:
+            case Ticket() as single_ticket:
+                channel = guild.get_channel(single_ticket.channel_id)
 
-        # Condition 5 : Si plusieurs tickets de l'utilisateur existe, alors on supprimer tous et on en crée une seule
-        elif isinstance(channel_results, list):
-            i = 0
-            for ch in channel_results[:]:
-                channel = guild.get_channel(ch.channel_id)
-                print(f"[Tickets Views]    Channel: {channel}")
-                i+=1
+                if channel and not single_ticket.is_application:
+                    await interaction.followup.send(
+                        f"Il existe un ticket ouvert à ton nom, je t'invite à t'y rendre {channel.mention}",
+                        delete_after=10
+                    )
 
-                if channel is None and not ch.is_application:
-                    self.db.supress_ticket(ch)
-                    channel_results.remove(ch)
-                    continue
-                elif channel and not ch.is_application:
-                    await channel.delete()
-                    self.db.supress_ticket(ch)
+                    print(f"[Tickets Views]   Ouverture d'un ticket | "
+                          f"Ticket déjà existant dans la base de données")
 
+            case list() as ticket_list if len(ticket_list) > 0:
+                print(f"[Tickets Views] Suppression des anciens tickets pour {user.name}...")
+                for t in ticket_list:
+                    ch = guild.get_channel(t.channel_id)
 
-            print(f"[Tickets Views]   Ouverture d'un ticket | "
-                  f"Suppression de {i} tickets de l'utilisateur {user.name}")
+                    if not t.is_application:
+                        self.db.supress_ticket(t)
+                        if ch:
+                            await ch.delete()
 
+            case _:
+                pass
+
+        if needs_creation:
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
                 user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
@@ -159,20 +139,20 @@ class OpenTicket(nextcord.ui.Button):
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
             }
 
+            # Création du canal (en utilisant la variable 'category' définie précédemment dans ton code précédent)
             new_channel = await guild.create_text_channel(
                 name=f"🐍-ticket-{user.name}",
                 overwrites=overwrites,
-                category=category
+                category=category  # Assure-toi que category est bien défini avant ce bloc
             )
 
-            await create_admin_thread(
-                channel=new_channel
-            )
+            # Création du thread admin (si nécessaire pour ton système de logs/suivi)
+            await create_admin_thread(channel=new_channel)
 
-
+            # Préparation des données DB
             data = Ticket(
                 guild_id=guild.id,
-                category_id=category.id,
+                category_id=category.id,  # Utilise la catégorie trouvée ou créée précédemment
                 step=step_idx,
                 channel_id=new_channel.id,
                 user_id=user.id,
@@ -181,61 +161,13 @@ class OpenTicket(nextcord.ui.Button):
             )
             self.db.insert_ticket(data)
 
+            # Mise à jour de la vue et envoi du message initial dans le ticket
             view.update_components(interaction, data)
-
-            await new_channel.send(
-                embeds=view.embd_choice_reason(),
-                view=view
-            )
+            await new_channel.send(embeds=view.embd_choice_reason(), view=view)
 
             print(f"[Tickets Views]   Ouverture d'un ticket | Création d'un ticket pour l'utilisateur {user.name}")
 
-            await interaction.followup.send(
-                f"Ton ticket a été créé : {new_channel.mention}",
-                delete_after=15,
-                ephemeral=True
-            )
-            return
-
-        # Condition 5 : Si aucun ticket ouvert, on en crée un
-        if channel_results is None or channel is None:
-            overwrites = {
-                guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                          read_message_history=True),
-                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-            }
-
-            new_channel = await guild.create_text_channel(
-                name=f"🐍-ticket-{user.name}",
-                overwrites=overwrites,
-                category=category
-            )
-
-            data = Ticket(
-                guild_id=guild.id,
-                category_id=category.id,
-                step=step_idx,
-                channel_id=new_channel.id,
-                user_id=user.id,
-                user_name=user.name,
-                application_ticket=0
-            )
-            self.db.insert_ticket(data)
-
-            view.update_components(interaction, data)
-
-            await new_channel.send(
-                embeds=view.embd_choice_reason(),
-                view=view
-            )
-
-            await create_admin_thread(
-                channel=new_channel
-            )
-
-            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'un ticket' pour l'utilisateur {user.name}")
-
+            # Réponse à l'utilisateur (Interaction followup ou response selon ton code initial)
             await interaction.followup.send(
                 f"Ton ticket a été créé : {new_channel.mention}",
                 delete_after=15,
@@ -249,7 +181,7 @@ class OpenTicket(nextcord.ui.Button):
 class CloseTicket(nextcord.ui.Button):
 
     def __init__(self, db: TicketsDB):
-        super().__init__(label="Fermer le ticket", style=nextcord.ButtonStyle.grey, custom_id="close_ticket")
+        super().__init__(label="Fermer le ticket", style=nextcord.ButtonStyle.red, custom_id="close_ticket")
         self.db = db
 
     async def callback(self, interaction: nextcord.Interaction):
@@ -510,7 +442,7 @@ class CancelTicket(nextcord.ui.Button):
         if log_channel and file_path:
             file_to_send = nextcord.File(file_path)
             await log_channel.send(
-                content=f"📁 **Archive du ticket supprimé**\nUtilisateur: {ticket.user_name}\n"
+                content=f"📁 **Archive du ticket **\nUtilisateur: {ticket.user_name}\n"
                         f"Canal: {channel.name}",
                 file=file_to_send
             )

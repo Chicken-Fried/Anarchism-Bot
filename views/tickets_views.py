@@ -35,6 +35,7 @@ class OpenTicketsView(nextcord.ui.View):
             self.add_item(SuggestTicket(db=self.db))
             self.add_item(IssuesTicket(db=self.db))
             self.add_item(AbsentTicket(db=self.db))
+            self.add_item(CloseTicket(db=self.db))
 
         if step == "close_ticket":
             self.add_item(CloseTicket(db=self.db))
