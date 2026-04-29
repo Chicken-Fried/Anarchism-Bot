@@ -411,7 +411,8 @@ class Tickets(commands.Cog):
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def open_user_ticket(
-            self, interaction: nextcord.Interaction,
+            self,
+            interaction: nextcord.Interaction,
             member: nextcord.Member,
             type_ticket: str = nextcord.SlashOption(
                 name="type_ticket",
@@ -714,8 +715,8 @@ class Tickets(commands.Cog):
         description="Ouvre le ticket ou la candidature pour l'utilisateur"
     )
     async def open_ticket(
-            self, interaction: nextcord.Interaction,
-            member: nextcord.Member,
+            self,
+            interaction: nextcord.Interaction,
             type_ticket: str = nextcord.SlashOption(
                 name="type_ticket",
                 required=True,
@@ -730,6 +731,7 @@ class Tickets(commands.Cog):
 
         step_idx = 0
         guild = interaction.guild
+        member = interaction.user
 
         category = None
 
