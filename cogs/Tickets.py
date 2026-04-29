@@ -644,7 +644,7 @@ class Tickets(commands.Cog):
 
         overwrites = {
             guild.default_role: PermissionOverwrite(view_channel=False),
-            member: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+            member: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
                                         read_message_history=True),
             guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
         }
@@ -654,15 +654,6 @@ class Tickets(commands.Cog):
             overwrites=overwrites,
             category=category
         )
-
-        overwrites = {
-            guild.default_role: PermissionOverwrite(view_channel=False),
-            member: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                        read_message_history=True, speak=True, attach_files=True,
-                                        connect=True,
-                                        use_voice_activation=True),
-            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-        }
 
         await create_admin_thread(
             channel=new_channel
@@ -679,6 +670,15 @@ class Tickets(commands.Cog):
         )
 
         if type_ticket == 'c':
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                member: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                            read_message_history=True, speak=True, attach_files=True,
+                                            connect=True,
+                                            use_voice_activation=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
             voice_channel = await guild.create_voice_channel(
                 name=f"Recrutement | {member.name}",
                 overwrites=overwrites,
@@ -928,7 +928,7 @@ class Tickets(commands.Cog):
 
         overwrites = {
             guild.default_role: PermissionOverwrite(view_channel=False),
-            member: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+            member: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
                                         read_message_history=True),
             guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
         }
@@ -938,15 +938,6 @@ class Tickets(commands.Cog):
             overwrites=overwrites,
             category=category
         )
-
-        overwrites = {
-            guild.default_role: PermissionOverwrite(view_channel=False),
-            member: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                        read_message_history=True, speak=True, attach_files=True,
-                                        connect=True,
-                                        use_voice_activation=True),
-            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-        }
 
         await create_admin_thread(
             channel=new_channel
@@ -963,6 +954,15 @@ class Tickets(commands.Cog):
         )
 
         if type_ticket == 'c':
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                member: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
+                                            read_message_history=True, speak=True, attach_files=True,
+                                            connect=True,
+                                            use_voice_activation=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
+            }
+
             voice_channel = await guild.create_voice_channel(
                 name=f"Recrutement | {member.name}",
                 overwrites=overwrites,
