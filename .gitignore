@@ -17,6 +17,7 @@ env/
 venv/
 .venv/
 user_data/
+datamine/
 pip-log.txt
 pip-delete-this-directory.txt
 
@@ -55,3 +56,4 @@ Dockerfile
 docker-compose.yml
 .DS_Store
 Thumbs.db
+/datamine/
