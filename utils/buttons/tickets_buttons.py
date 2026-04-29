@@ -134,7 +134,7 @@ class OpenTicket(nextcord.ui.Button):
         if needs_creation:
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
                                           read_message_history=True),
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
             }

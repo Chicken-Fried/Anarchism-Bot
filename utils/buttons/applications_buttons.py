@@ -6,7 +6,6 @@ from nextcord import PermissionOverwrite
 from database.db_tickets import TicketsDB
 from utils.tickets_log import save_channel_to_json
 from database.models.tickets_class import Ticket, TicketGuilds, TicketViewChannels
-from embed.tickets_embeds import alert_ticket_embed, AlertTicketEmbed
 from utils.threads.threads import create_admin_thread
 
 from dotenv import load_dotenv
@@ -21,11 +20,6 @@ SQB_STAFF_CHANNEL_ID = os.getenv('SQB_SERVER_STAFF_CHANNEL_ID')
 GUILD_COMMUNITY_SERVER_ID = os.getenv('COMMUNITY_SERVER_GUILD_ID')
 COMMUNITY_STAFF_ID = os.getenv('COMMUNITY_STAFF_ROLE_ID')
 COMMUNITY_STAFF_CHANNEL_ID = os.getenv('COMMUNITY_STAFF_CHANNEL_ID')
-
-ROLES_ID = {
-    int(GUILD_SQB_SERVER_ID): (int(SQB_STAFF_ID), int(SQB_STAFF_CHANNEL_ID)),
-    int(GUILD_COMMUNITY_SERVER_ID): (int(COMMUNITY_STAFF_ID), int(COMMUNITY_STAFF_CHANNEL_ID)),
-}
 
 
 class OpenApplication(nextcord.ui.Button):
@@ -46,58 +40,37 @@ class OpenApplication(nextcord.ui.Button):
         cat_results = self.db.get_cat_ticket(interaction.guild_id, get_all=True)
         category = None
 
-        if isinstance(cat_results, TicketGuilds):
-            category = guild.get_channel(cat_results.category_id)
+        match cat_results:
+            case TicketGuilds() as single_config:
+                """CAS 1 : Une seule configuration existe déjà (Objet unique)."""
+                category = guild.get_channel(single_config.category_id)
+                if category:
+                    print("[Applications Views]   Ouverture d'un ticket | Catégorie existante trouvée.")
+                else:
+                    # Si la DB dit qu'elle existe mais que le canal a été supprimé manuellement sur Discord
+                    cat_results = None  # On force le passage au cas de création (cas par défaut)
 
-            if category:
-                print(f"[Applications Views]   Ouverture d'un ticket | "
-                      f"Catégorie déjà existante dans la base de données")
+            case list() as cat_list if len(cat_list) > 0:
+                """CAS 2 : Plusieurs configurations existent. Il faut tout nettoyer avant de recréer."""
+                print(f"[Applications Views] Nettoyage de {len(cat_list)} anciennes catégories...")
 
-        # Condition 2 : Si les catégories Applications existent, on va tous les supprimer pour en créer qu'une
-        elif isinstance(cat_results, list):
-            i = 0
-            for cat in cat_results[:]:
-                category = guild.get_channel(cat.category_id)
-                print(f"[Applications Views]    Category: {category}")
-                i += 1
-                if category is None:
-                    self.db.supress_cat_ticket(cat)
-                    cat_results.remove(cat)
-                    continue
+                for config in cat_list[:]:  # On itère sur une copie pour pouvoir supprimer sans erreur d'index
+                    channel = guild.get_channel(config.category_id)
+                    if channel:
+                        await channel.delete()
+                    self.db.supress_cat_ticket(config)
 
-                await category.delete()
-                self.db.supress_cat_ticket(cat)
+                # Après le nettoyage, on passe à la création (on laisse tomber vers le cas par défaut via une exception ou en réinitialisant cat_results)
+                cat_results = None
 
-            print(f"[Applications Views]   Ouverture d'un ticket | "
-                  f"Suppression de l'ensemble des catégories ouverte dans la meme guild - Nombre: {i}")
-
-            overwrites = {
-                guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
-                                          read_message_history=True),
-                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-            }
-
-            category = await guild.create_category(
-                name="= TICKETS =",
-                overwrites=overwrites,
-                position=0
-            )
-
-            data = TicketGuilds(
-                guild_id=guild.id,
-                category_id=category.id
-            )
-            self.db.insert_cat_ticket(data)
-
-            print(f"[Tickets Views]   Ouverture d'un ticket | Création d'une catégorie {category.name}")
+            case _:
+                """CAS PAR DÉFAUT : Rien n'existe (None ou liste vide). On crée tout."""
+                cat_results = None
 
         # Condition 3 : Si la catégorie Ticket n'existe pas, alors on le crée
-        if cat_results is None or category is None:
+        if cat_results is None:
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
-                                          read_message_history=True),
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
             }
 
@@ -118,61 +91,50 @@ class OpenApplication(nextcord.ui.Button):
 
 
         channel_results = self.db.get_tickets(interaction.guild_id, interaction.user.id, get_all=True)
-        channel = None
+        needs_creation = True
 
-        # Condition 4 : Si le ticket de l'utilisateur existe, alors on la maintient
-        if isinstance(channel_results, Ticket):
-            ch = channel_results
-            channel = guild.get_channel(ch.channel_id)
-            voice_channel = guild.get_channel(ch.voice_channel_id)
+        match channel_results:
+            case Ticket() as single_ticket:
+                channel = guild.get_channel(single_ticket.channel_id)
+                voice_channel = guild.get_channel(single_ticket.voice_channel_id)
 
-            if channel and ch.is_application:
-                if voice_channel:
-                    await voice_channel.delete()
-
-                await interaction.followup.send(
-                    f"Il existe une candidature ouvert à ton nom, je t'invite à t'y rendre {channel.mention}",
-                    delete_after=10
-                )
-
-                print(f"[Applications Views]   Ouverture d'un ticket | "
-                      f"Candidature déjà existant dans la base de données")
-
-                return
-
-
-        # Condition 5 : Si plusieurs tickets de l'utilisateur existe, alors on supprimer tous et on en crée une seule
-        elif isinstance(channel_results, list):
-            i = 0
-            for ch in channel_results[:]:
-                channel = guild.get_channel(ch.channel_id)
-                voice_channel = guild.get_channel(ch.voice_channel_id)
-
-                print(f"[Applications Views]    Channel: {channel}")
-                i+=1
-
-                if channel is None and ch.is_application:
+                if channel and single_ticket.is_application:
                     if voice_channel:
                         await voice_channel.delete()
 
-                    self.db.supress_ticket(ch)
-                    channel_results.remove(ch)
-                    continue
-                elif channel and ch.is_application:
-                    if voice_channel:
-                        await voice_channel.delete()
+                    await interaction.followup.send(
+                        f"Il existe une candidature ouvert à ton nom, je t'invite à t'y rendre {channel.mention}",
+                        delete_after=10
+                    )
 
-                    await channel.delete()
-                    self.db.supress_ticket(ch)
+                    print(f"[Applications Views]   Ouverture d'un ticket | "
+                          f"Candidature déjà existant dans la base de données")
 
+                    return
 
-            print(f"[Applications Views]   Ouverture d'une candidature | "
-                  f"Suppression de {i} tickets candidatures de l'utilisateur {user.name}")
+            case list() as ticket_list if len(ticket_list) > 0:
+                print(f"[Applications Views] Suppression des anciens tickets pour {user.name}...")
 
+                for t in ticket_list:
+                    ch = guild.get_channel(t.channel_id)
+                    v_ch = guild.get_channel(t.voice_channel_id)
 
+                    if t.is_application:
+                        if v_ch:
+                            await v_ch.delete()
+
+                        if ch:
+                            await ch.delete()
+
+                        self.db.supress_ticket(t)
+
+            case _:
+                pass
+
+        if needs_creation:
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
                                           read_message_history=True),
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
             }
@@ -185,7 +147,7 @@ class OpenApplication(nextcord.ui.Button):
 
             overwrites = {
                 guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
+                user: PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True,
                                           read_message_history=True, speak=True, attach_files=True, connect=True,
                                           use_voice_activation=True),
                 guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
@@ -201,36 +163,6 @@ class OpenApplication(nextcord.ui.Button):
                 channel=new_channel
             )
 
-            result = ROLES_ID.get(guild.id)
-
-            if result:
-                staff_id = result[0]
-                alert_channel_id = result[1]
-
-                # 2. Récupération des objets canaux
-                ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_role(staff_id)
-
-                if ping_ch and ping_staff:
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
-                        description=(
-                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
-                            f"dès que vous êtes disponible !\n"
-                            f"{ping_staff.mention}"
-                        ),
-                    )
-
-                    await ping_ch.send(
-                        embed=alert_ticket_embed(
-                            at_embed=at_embeds
-                        )
-                    )
-                else:
-                    print(
-                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
-                        f"channel staff")
-
 
             data = Ticket(
                 guild_id=guild.id,
@@ -244,6 +176,7 @@ class OpenApplication(nextcord.ui.Button):
             )
             self.db.insert_ticket(data)
 
+            # Mise à jour de la vue et envoi du message initial dans le ticket
             view.update_components(interaction, data)
 
             await new_channel.send(
@@ -251,7 +184,7 @@ class OpenApplication(nextcord.ui.Button):
                 view=view
             )
 
-            print(f"[Applications Views]   Ouverture d'un ticket | Création d'un ticket pour l'utilisateur {user.name}")
+            print(f"[Applications Views]   Ouverture d'une candidature | Création d'une candidature pour l'utilisateur {user.name}")
 
             await interaction.followup.send(
                 f"Ta candidature a été créé : {new_channel.mention}",
@@ -259,97 +192,6 @@ class OpenApplication(nextcord.ui.Button):
                 ephemeral=True
             )
             return
-
-        # Condition 5 : Si aucun ticket ouvert, on en crée un
-        if channel_results is None or channel is None:
-            overwrites = {
-                guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                          read_message_history=True),
-                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-            }
-
-            new_channel = await guild.create_text_channel(
-                name=f"️️✉️️-candidature-{user.name}",
-                overwrites=overwrites,
-                category=category
-            )
-
-            overwrites = {
-                guild.default_role: PermissionOverwrite(view_channel=False),
-                user: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                          read_message_history=True, speak=True, attach_files=True, connect=True,
-                                          use_voice_activation=True),
-                guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-            }
-
-            voice_channel = await guild.create_voice_channel(
-                name=f"Recrutement | {user.name}",
-                overwrites=overwrites,
-                category=category
-            )
-
-            await create_admin_thread(
-                channel=new_channel
-            )
-
-            result = ROLES_ID.get(guild.id)
-
-            if result:
-                staff_id = result[0]
-                alert_channel_id = result[1]
-
-                # 2. Récupération des objets canaux
-                ping_ch = guild.get_channel(alert_channel_id)
-                ping_staff = guild.get_role(staff_id)
-
-                if ping_ch and ping_staff:
-                    at_embeds = AlertTicketEmbed(
-                        title=f"🧾 | Un utilisateur a ouvert une candidature | <#{new_channel.id}> !",
-                        description=(
-                            f"N'hésitez pas à finaliser sa candidature et à le recruter "
-                            f"dès que vous êtes disponible !\n"
-                            f"{ping_staff.mention}"
-                        ),
-                    )
-
-                    await ping_ch.send(
-                        embed=alert_ticket_embed(
-                            at_embed=at_embeds
-                        )
-                    )
-                else:
-                    print(
-                        f"[Applications Views]   Ouverture d'une candidature | Erreur dans l'envoie des pings dans le "
-                        f"channel staff")
-
-            data = Ticket(
-                guild_id=guild.id,
-                category_id=category.id,
-                step=step_idx,
-                channel_id=new_channel.id,
-                voice_channel_id=voice_channel.id,
-                user_id=user.id,
-                user_name=user.name,
-                application_ticket=1
-            )
-            self.db.insert_ticket(data)
-
-            view.update_components(interaction, data)
-
-            await new_channel.send(
-                embeds=view.embd_response(data),
-                view=view
-            )
-
-            print(f"[Applications Views]   Ouverture d'une candidature | Création d'une candidature pour l'utilisateur "
-                  f"{user.name}")
-
-            await interaction.followup.send(
-                f"Ta candidature a été créé : {new_channel.mention}",
-                ephemeral=True,
-                delete_after=15
-            )
 
 # ── BUTTON URL ─────────────────────────────────────────────────────────
 
@@ -369,7 +211,7 @@ class UrlFormularyButton(nextcord.ui.Button):
 class CloseTicket(nextcord.ui.Button):
 
     def __init__(self, db: TicketsDB):
-        super().__init__(label="Fermer la candidature", style=nextcord.ButtonStyle.grey, custom_id="close_ticket")
+        super().__init__(label="Fermer la candidature", style=nextcord.ButtonStyle.red, custom_id="close_ticket")
         self.db = db
 
     async def callback(self, interaction: nextcord.Interaction):

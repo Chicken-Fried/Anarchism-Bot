@@ -19,6 +19,8 @@ load_dotenv()
 TICKETS_LOG_CHANNEL_ID = os.getenv('STAFF_SERVER_TICKETS_LOG_CHANNEL_ID')
 GUILD_STAFF_SERVER_ID = os.getenv('GUILD_STAFF_SERVER_ID')
 
+COMMUNITY_GUILD_ID = os.getenv('COMMUNITY_SERVER_GUILD_ID')
+
 
 class Tickets(commands.Cog):
     def __init__(self, bot):
@@ -405,19 +407,19 @@ class Tickets(commands.Cog):
 
     @nextcord.slash_command(
         name="open-ticket-for-user",
-        description="Ouvre le ticket/la candidature d'un utilisateur",
+        description="Ouvre le ticket ou la candidature d'un utilisateur",
         default_member_permissions=nextcord.Permissions(administrator=True)
     )
     async def open_user_ticket(
             self, interaction: nextcord.Interaction,
             member: nextcord.Member,
             type_ticket: str = nextcord.SlashOption(
-                name="Type de ticket",
+                name="type_ticket",
                 required=True,
                 description="Choisissez le type de ticket",
                 choices={
-                    "t": "Ticket",
-                    "c": "Candidature"
+                    "Ticket": "t",
+                    "Candidature": "c"
                 }
             )
     ):
@@ -661,13 +663,6 @@ class Tickets(commands.Cog):
             guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
         }
 
-        if type_ticket == 'c':
-            voice_channel = await guild.create_voice_channel(
-                name=f"Recrutement | {member.name}",
-                overwrites=overwrites,
-                category=category
-            )
-
         await create_admin_thread(
             channel=new_channel
         )
@@ -677,11 +672,20 @@ class Tickets(commands.Cog):
             category_id=category.id,
             step=step_idx,
             channel_id=new_channel.id,
-            voice_channel_id=voice_channel.id,
             user_id=member.id,
             user_name=member.name,
             application_ticket=1 if type_ticket == 'c' else 0
         )
+
+        if type_ticket == 'c':
+            voice_channel = await guild.create_voice_channel(
+                name=f"Recrutement | {member.name}",
+                overwrites=overwrites,
+                category=category
+            )
+            data.voice_channel_id = voice_channel.id
+
+
         self.db.insert_ticket(data)
 
         # Mise à jour de la vue et envoi du message initial dans le ticket
@@ -707,18 +711,18 @@ class Tickets(commands.Cog):
 
     @nextcord.slash_command(
         name="ticket-or-application",
-        description="Ouvre le ticket/la candidature pour l'utilisateur"
+        description="Ouvre le ticket ou la candidature pour l'utilisateur"
     )
     async def open_ticket(
             self, interaction: nextcord.Interaction,
             member: nextcord.Member,
             type_ticket: str = nextcord.SlashOption(
-                name="Type de ticket",
+                name="type_ticket",
                 required=True,
                 description="Choisissez le type de ticket",
                 choices={
-                    "t": "Ticket",
-                    "c": "Candidature"
+                    "Ticket": "t",
+                    "Candidature": "c"
                 }
             )
     ):
@@ -942,13 +946,6 @@ class Tickets(commands.Cog):
             guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
         }
 
-        if type_ticket == 'c':
-            voice_channel = await guild.create_voice_channel(
-                name=f"Recrutement | {member.name}",
-                overwrites=overwrites,
-                category=category
-            )
-
         await create_admin_thread(
             channel=new_channel
         )
@@ -958,11 +955,19 @@ class Tickets(commands.Cog):
             category_id=category.id,
             step=step_idx,
             channel_id=new_channel.id,
-            voice_channel_id=voice_channel.id,
             user_id=member.id,
             user_name=member.name,
             application_ticket=1 if type_ticket == 'c' else 0
         )
+
+        if type_ticket == 'c':
+            voice_channel = await guild.create_voice_channel(
+                name=f"Recrutement | {member.name}",
+                overwrites=overwrites,
+                category=category
+            )
+            data.voice_channel_id = voice_channel.id
+
         self.db.insert_ticket(data)
 
         # Mise à jour de la vue et envoi du message initial dans le ticket
@@ -975,7 +980,7 @@ class Tickets(commands.Cog):
             )
         else:
             await new_channel.send(
-                embeds=current_view.embd_choice_reason(data),
+                embeds=current_view.embd_choice_reason(),
                 view=current_view
             )
 
