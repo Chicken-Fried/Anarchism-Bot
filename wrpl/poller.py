@@ -38,7 +38,8 @@ USER_DATA_DIR = os.path.abspath(ENV_USER_DATA_PATCH)
 
 # ── Config ────────────────────────────────────────────────────────────────
 MAX_PARTS          = 30          # 0000.wrpl → 0030.wrpl max
-MAX_DL_CONCURRENT  = 5           # téléchargements parallèles par session
+MAX_DL_CONCURRENT  = 5           # téléchargements parallèles par session (parts d'un même item)
+MAX_ITEM_CONCURRENT = 4          # items traités en parallèle dans poll_once
 
 SQB_PAYLOAD = {
     "gameMode":         ["arcade", "realistic", "simulation"],
@@ -101,73 +102,96 @@ async def _download_part(
     """
     Télécharge un fichier .wrpl et valide le magic byte e5ac0010.
     Retourne True uniquement si c'est un vrai replay WT.
+    Gère les 429 avec backoff sur Retry-After.
     """
-    try:
-        r = await client.get(url, follow_redirects=True, timeout=30)
-        if r.status_code != 200:
-            return False
-        content = r.content
-        # Valide magic + taille minimale
-        if len(content) < WRPL_MIN_SIZE or content[:4] != WRPL_MAGIC:
-            log.debug("Fichier invalide reçu pour %s (%d octets, magic=%s)",
-                      url, len(content), content[:4].hex() if content else "vide")
-            return False
-        dest.write_bytes(content)
-        return True
-    except Exception as exc:
-        log.debug("Erreur téléchargement %s : %s", url, exc)
-        return False
+    for attempt in range(3):
+        try:
+            r = await client.get(url, follow_redirects=True, timeout=30)
+
+            if r.status_code == 429:
+                retry_after = int(r.headers.get("Retry-After", 10 * (attempt + 1)))
+                log.warning("429 Too Many Requests %s — attente %ds", url, retry_after)
+                await asyncio.sleep(retry_after)
+                continue
+
+            if r.status_code != 200:
+                return False
+
+            content = r.content
+            if len(content) < WRPL_MIN_SIZE or content[:4] != WRPL_MAGIC:
+                log.debug("Fichier invalide reçu pour %s (%d octets, magic=%s)",
+                          url, len(content), content[:4].hex() if content else "vide")
+                return False
+            dest.write_bytes(content)
+            return True
+
+        except Exception as exc:
+            log.debug("Erreur téléchargement %s (tentative %d) : %s", url, attempt + 1, exc)
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+
+    return False
 
 
 async def download_wrpl_files(
     base_url: str,
     session_hex: str,
     dest_dir: Path,
-    user_agent: str,
-    cookies: dict,
+    client: httpx.AsyncClient,
 ) -> list[str]:
     """
-    Télécharge les fichiers .wrpl d'une session.
-    base_url = item["url"]  ex: "https://wt-game-replays.warthunder.com/064c8aa.../'"
-    Retourne la liste des chemins téléchargés.
+    Télécharge les fichiers .wrpl d'une session en parallèle (MAX_DL_CONCURRENT).
+    Procède par batches : si un part est absent dans le batch, on arrête.
+    base_url = item["url"]  ex: "https://wt-game-replays.warthunder.com/064c8aa.../"
+    Utilise le client httpx partagé du poller (pool de connexions persistent).
+    Retourne la liste des chemins téléchargés (ordonnés).
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    downloaded = []
+    sem = asyncio.Semaphore(MAX_DL_CONCURRENT)
 
-    headers = {
-        "User-Agent": user_agent,
-        "Referer":    "https://warthunder.com/",
-    }
+    async def try_part(part_idx: int) -> tuple[int, str | None]:
+        part_name = f"{part_idx:04d}.wrpl"
+        file_url  = f"{base_url.rstrip('/')}/{part_name}"
+        file_path = dest_dir / part_name
 
-    async with httpx.AsyncClient(headers=headers, cookies=cookies) as client:
-        for part_idx in range(MAX_PARTS):
-            part_name = f"{part_idx:04d}.wrpl"
-            file_url  = f"{base_url.rstrip('/')}/{part_name}"
-            file_path = dest_dir / part_name
+        # Skip si déjà valide en cache
+        if file_path.exists() and file_path.stat().st_size >= WRPL_MIN_SIZE:
+            try:
+                if file_path.read_bytes()[:4] == WRPL_MAGIC:
+                    return part_idx, str(file_path)
+            except Exception:
+                pass
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
 
-            log.debug("Téléchargement %s...", part_name)
-
-            # Skip si déjà téléchargé et valide
-            if file_path.exists() and file_path.stat().st_size >= WRPL_MIN_SIZE:
-                try:
-                    if file_path.read_bytes()[:4] == WRPL_MAGIC:
-                        downloaded.append(str(file_path))
-                        continue
-                    else:
-                        log.debug("Cache invalide supprimé : %s", file_path.name)
-                        file_path.unlink()
-                except Exception:
-                    pass
-
+        async with sem:
             ok = await _download_part(client, file_url, file_path)
 
-            if ok:
-                log.debug("  %s/%s OK", session_hex, part_name)
-                downloaded.append(str(file_path))
-            else:
-                # Arrête dès qu'un fichier est absent
-                log.debug("  %s : fin à %s", session_hex, part_name)
+        if ok:
+            log.debug("  %s/%s OK", session_hex, part_name)
+            return part_idx, str(file_path)
+        else:
+            log.debug("  %s : absent à %s", session_hex, part_name)
+            return part_idx, None
+
+    downloaded: list[str] = []
+
+    for batch_start in range(0, MAX_PARTS, MAX_DL_CONCURRENT):
+        batch = range(batch_start, min(batch_start + MAX_DL_CONCURRENT, MAX_PARTS))
+        results = await asyncio.gather(*[try_part(i) for i in batch])
+        results.sort(key=lambda x: x[0])
+
+        gap_found = False
+        for _idx, path in results:
+            if path is None:
+                gap_found = True
                 break
+            downloaded.append(path)
+
+        if gap_found:
+            break
 
     return downloaded
 
@@ -180,12 +204,12 @@ class WTPoller:
     """
 
     def __init__(self, db):
-        self.db          = db
-        self._playwright = None
-        self._context    = None
-        self._page       = None
-        self._running    = False
-        # Mis à jour après chaque goto()
+        self.db           = db
+        self._playwright  = None
+        self._context     = None
+        self._page        = None
+        self._running     = False
+        self._http_client: httpx.AsyncClient | None = None
         self._user_agent  = ""
         self._cookies     = {}
 
@@ -221,11 +245,24 @@ class WTPoller:
         raw_cookies      = await self._context.cookies()
         self._cookies    = {c["name"]: c["value"] for c in raw_cookies}
 
+        # Client httpx partagé — pool de connexions persistent entre tous les téléchargements
+        self._http_client = httpx.AsyncClient(
+            headers={
+                "User-Agent": self._user_agent,
+                "Referer":    "https://warthunder.com/",
+            },
+            cookies=self._cookies,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            timeout=30,
+        )
+
         log.info("Playwright prêt — %d cookies chargés", len(self._cookies))
 
     async def stop(self):
         """Ferme Playwright proprement."""
         self._running = False
+        if self._http_client:
+            await self._http_client.aclose()
         if self._context:
             await self._context.close()
         if self._playwright:
@@ -347,7 +384,7 @@ class WTPoller:
             try:
                 wrpl_files = await download_wrpl_files(
                     base_url, session_hex, dest,
-                    self._user_agent, self._cookies,
+                    self._http_client,
                 )
 
                 if wrpl_files:
@@ -411,22 +448,23 @@ class WTPoller:
     # ── Boucle de polling ─────────────────────────────────────────────────
     async def poll_once(self):
         """
-        Un cycle : parcourt les pages de l'API tant qu'il y a du nouveau
-        ou des items inconnus, jusqu'à atteindre un seuil de sessions connues.
+        Un cycle : parcourt les pages de l'API, collecte les items inconnus,
+        puis les traite en parallèle (MAX_ITEM_CONCURRENT à la fois).
         """
-
         page = 1
         new_count_total = 0
-        known_streak = 0  # IMPORTANT : Déclaré HORS de la boucle while
+        known_streak = 0
+        pending_items: list[dict] = []
+        stop_pagination = False
 
-        while True:
+        # ── Phase 1 : collecte des items inconnus (rapide, séquentielle) ──
+        while not stop_pagination:
             items = await self._fetch_sqb_items(page_num=page)
             if not items:
-                break  # Fin de pagination (plus de données)
+                break
 
-            page_has_new = False
-            page_stopped_by_streak = False
-
+            # Résout les session_hex de toute la page en une passe
+            page_sids: list[tuple[str, dict]] = []
             for item in items:
                 sid = item.get("sessionIdHex") or ""
                 if not sid:
@@ -434,60 +472,58 @@ class WTPoller:
                         sid = hex(int(item.get("sessionId", 0)))[2:]
                     except Exception:
                         continue
+                page_sids.append((sid, item))
 
-                # 1. Filtre hors-créneau (Arrêt immédiat de TOUTE la pagination)
-                window_start = get_session_window_start(datetime.now(timezone.utc))
+            # 1 seule requête SQLite pour toute la page
+            known_set = self.db.sessions_exist_batch([s for s, _ in page_sids])
+            window_start = get_session_window_start(datetime.now(timezone.utc))
+
+            for sid, item in page_sids:
                 item_start = item.get("startTime", 0)
-                print(f"TIMESTAMPS {window_start} - {item_start}")
                 if window_start and item_start and item_start < window_start:
-                    log.debug("SQB %s hors créneau (startTime=%s < window=%s) → arrêt pagination",
-                              sid, window_start, item_start)
-                    page_stopped_by_streak = True  # On sort de la boucle for
+                    log.debug("SQB %s hors créneau → arrêt pagination", sid)
+                    stop_pagination = True
                     break
 
-                # 2. Vérification si déjà connu
-                if self.db.session_exists(sid):
+                if sid in known_set:
                     known_streak += 1
                     log.debug("SQB %s déjà connu (%d consécutifs)", sid, known_streak)
-
-                    """if known_streak >= 25:
-                        log.debug("25 SQB connus consécutifs → arrêt pagination")
-                        page_stopped_by_streak = True  # On sort de la boucle for
-                        break"""
                     continue
 
-                # 3. Si on arrive ici, c'est un item INCONNU
-                known_streak = 0  # Reset du compteur car on a trouvé du nouveau
-                page_has_new = True
+                known_streak = 0
+                pending_items.append(item)
 
+            if stop_pagination:
+                break
+
+            page += 1
+
+        if not pending_items:
+            return
+
+        log.info("poll_once : %d item(s) inconnu(s) à traiter en parallèle", len(pending_items))
+
+        # ── Phase 2 : traitement concurrent avec semaphore ──────────────────
+        sem = asyncio.Semaphore(MAX_ITEM_CONCURRENT)
+
+        async def process_with_sem(item: dict) -> bool:
+            async with sem:
+                sid = item.get("sessionIdHex") or item.get("id", "?")
                 try:
-                    if await self._process_item(item):
-                        new_count_total += 1
+                    return await self._process_item(item)
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     raise
                 except Exception as exc:
                     log.exception("_process_item %s : %s", sid, exc)
+                    return False
 
-            # --- Logique de sortie de la boucle WHILE ---
-
-            # Si on a atteint le seuil de connus ou le filtre date sur cette page
-            if page_stopped_by_streak:
-                break
-
-            # Utilisation pour le log de debug
-            if not page_has_new:
-                log.debug("Page %d : aucun nouvel item trouvé, on continue la recherche...", page)
-            else:
-                log.debug("Page %d : nouveaux items détectés", page)
-
-            # Si la page était vide ou si on a fini de parcourir les items sans break
-            # On passe à la page suivante
-            page += 1
+        results = await asyncio.gather(*[process_with_sem(it) for it in pending_items])
+        new_count_total = sum(1 for r in results if r)
 
         if new_count_total > 0:
             log.info("Cycle terminé : %d nouveau(x) SQB traité(s)", new_count_total)
 
-    async def poll_loop(self, interval_seconds: int = 120):
+    async def poll_loop(self, interval_seconds: int = 30):
         """
         Boucle principale asyncio — lancée depuis main.py via bot.loop.create_task().
         Polling actif uniquement dans les créneaux SQB (00h-09h et 14h-23h UTC).
