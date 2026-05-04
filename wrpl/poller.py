@@ -94,15 +94,21 @@ def is_sqb_window() -> bool:
 WRPL_MAGIC    = bytes([0xe5, 0xac, 0x00, 0x10])
 WRPL_MIN_SIZE = 1226  # taille header minimum
 
+_DL_OK    = "ok"       # fichier téléchargé et valide
+_DL_END   = "end"     # fichier absent (404) → fin des parts
+_DL_SKIP  = "skip"    # erreur transiente (429, timeout) → ne pas stopper
+
 async def _download_part(
     client: httpx.AsyncClient,
     url: str,
     dest: Path,
-) -> bool:
+) -> str:
     """
     Télécharge un fichier .wrpl et valide le magic byte e5ac0010.
-    Retourne True uniquement si c'est un vrai replay WT.
-    Gère les 429 avec backoff sur Retry-After.
+    Retourne :
+      _DL_OK   — fichier valide écrit sur disque
+      _DL_END  — fichier inexistant (404/invalide) = fin des parts de la session
+      _DL_SKIP — erreur transiente (429, timeout) = réessayer plus tard, ne pas stopper
     """
     for attempt in range(3):
         try:
@@ -112,25 +118,30 @@ async def _download_part(
                 retry_after = int(r.headers.get("Retry-After", 10 * (attempt + 1)))
                 log.warning("429 Too Many Requests %s — attente %ds", url, retry_after)
                 await asyncio.sleep(retry_after)
-                continue
+                continue  # retry → si épuisé, retourne _DL_SKIP
+
+            if r.status_code == 404:
+                return _DL_END  # fichier définitivement absent
 
             if r.status_code != 200:
-                return False
+                log.debug("HTTP %d pour %s", r.status_code, url)
+                continue  # autre erreur serveur : transiente
 
             content = r.content
             if len(content) < WRPL_MIN_SIZE or content[:4] != WRPL_MAGIC:
-                log.debug("Fichier invalide reçu pour %s (%d octets, magic=%s)",
+                log.debug("Fichier invalide %s (%d octets, magic=%s)",
                           url, len(content), content[:4].hex() if content else "vide")
-                return False
+                return _DL_END  # contenu invalide = ce part n'existe pas vraiment
+
             dest.write_bytes(content)
-            return True
+            return _DL_OK
 
         except Exception as exc:
             log.debug("Erreur téléchargement %s (tentative %d) : %s", url, attempt + 1, exc)
             if attempt < 2:
                 await asyncio.sleep(2 ** attempt)
 
-    return False
+    return _DL_SKIP  # retries épuisés sur erreur transiente
 
 
 async def download_wrpl_files(
@@ -141,40 +152,43 @@ async def download_wrpl_files(
 ) -> list[str]:
     """
     Télécharge les fichiers .wrpl d'une session en parallèle (MAX_DL_CONCURRENT).
-    Procède par batches : si un part est absent dans le batch, on arrête.
+    Règles de stop :
+      - _DL_END (404/invalide) → fin réelle des parts, on stoppe
+      - _DL_SKIP (429/timeout) → erreur transiente, on inclut les fichiers
+        déjà en cache et on continue (pas de stop sur rate-limit)
     base_url = item["url"]  ex: "https://wt-game-replays.warthunder.com/064c8aa.../"
-    Utilise le client httpx partagé du poller (pool de connexions persistent).
-    Retourne la liste des chemins téléchargés (ordonnés).
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     sem = asyncio.Semaphore(MAX_DL_CONCURRENT)
 
-    async def try_part(part_idx: int) -> tuple[int, str | None]:
+    async def try_part(part_idx: int) -> tuple[int, str | None, str]:
+        """Retourne (part_idx, chemin_ou_None, statut _DL_*)."""
         part_name = f"{part_idx:04d}.wrpl"
         file_url  = f"{base_url.rstrip('/')}/{part_name}"
         file_path = dest_dir / part_name
 
-        # Skip si déjà valide en cache
+        # Cache valide → toujours inclure, même s'il y a un gap avant
         if file_path.exists() and file_path.stat().st_size >= WRPL_MIN_SIZE:
             try:
                 if file_path.read_bytes()[:4] == WRPL_MAGIC:
-                    return part_idx, str(file_path)
+                    return part_idx, str(file_path), _DL_OK
             except Exception:
                 pass
-            try:
-                file_path.unlink()
-            except Exception:
-                pass
+            file_path.unlink(missing_ok=True)
 
         async with sem:
-            ok = await _download_part(client, file_url, file_path)
+            status = await _download_part(client, file_url, file_path)
 
-        if ok:
+        if status == _DL_OK:
             log.debug("  %s/%s OK", session_hex, part_name)
-            return part_idx, str(file_path)
-        else:
-            log.debug("  %s : absent à %s", session_hex, part_name)
-            return part_idx, None
+            return part_idx, str(file_path), _DL_OK
+        elif status == _DL_END:
+            log.debug("  %s : fin à %s (404)", session_hex, part_name)
+            return part_idx, None, _DL_END
+        else:  # _DL_SKIP
+            log.warning("  %s/%s : erreur transiente (429/timeout) — inclus si en cache",
+                        session_hex, part_name)
+            return part_idx, None, _DL_SKIP
 
     downloaded: list[str] = []
 
@@ -183,14 +197,19 @@ async def download_wrpl_files(
         results = await asyncio.gather(*[try_part(i) for i in batch])
         results.sort(key=lambda x: x[0])
 
-        gap_found = False
-        for _idx, path in results:
-            if path is None:
-                gap_found = True
-                break
-            downloaded.append(path)
+        end_found   = False
+        all_skipped = True  # true si tout le batch est skip/end (protection boucle infinie)
 
-        if gap_found:
+        for _idx, path, status in results:
+            if status == _DL_END:
+                end_found = True
+                break
+            if path is not None:
+                downloaded.append(path)
+                all_skipped = False
+            # _DL_SKIP sans cache → on ne stoppe pas, mais on n'ajoute rien
+
+        if end_found or all_skipped:
             break
 
     return downloaded
