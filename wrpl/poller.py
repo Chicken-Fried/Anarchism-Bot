@@ -137,22 +137,16 @@ async def download_wrpl_files(
     base_url: str,
     session_hex: str,
     dest_dir: Path,
-    user_agent: str,
-    cookies: dict,
+    client: httpx.AsyncClient,
 ) -> list[str]:
     """
     Télécharge les fichiers .wrpl d'une session en parallèle (MAX_DL_CONCURRENT).
     Procède par batches : si un part est absent dans le batch, on arrête.
     base_url = item["url"]  ex: "https://wt-game-replays.warthunder.com/064c8aa.../"
+    Utilise le client httpx partagé du poller (pool de connexions persistent).
     Retourne la liste des chemins téléchargés (ordonnés).
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
-
-    headers = {
-        "User-Agent": user_agent,
-        "Referer":    "https://warthunder.com/",
-    }
-
     sem = asyncio.Semaphore(MAX_DL_CONCURRENT)
 
     async def try_part(part_idx: int) -> tuple[int, str | None]:
@@ -184,21 +178,20 @@ async def download_wrpl_files(
 
     downloaded: list[str] = []
 
-    async with httpx.AsyncClient(headers=headers, cookies=cookies) as client:
-        for batch_start in range(0, MAX_PARTS, MAX_DL_CONCURRENT):
-            batch = range(batch_start, min(batch_start + MAX_DL_CONCURRENT, MAX_PARTS))
-            results = await asyncio.gather(*[try_part(i) for i in batch])
-            results.sort(key=lambda x: x[0])
+    for batch_start in range(0, MAX_PARTS, MAX_DL_CONCURRENT):
+        batch = range(batch_start, min(batch_start + MAX_DL_CONCURRENT, MAX_PARTS))
+        results = await asyncio.gather(*[try_part(i) for i in batch])
+        results.sort(key=lambda x: x[0])
 
-            gap_found = False
-            for _idx, path in results:
-                if path is None:
-                    gap_found = True
-                    break
-                downloaded.append(path)
-
-            if gap_found:
+        gap_found = False
+        for _idx, path in results:
+            if path is None:
+                gap_found = True
                 break
+            downloaded.append(path)
+
+        if gap_found:
+            break
 
     return downloaded
 
@@ -211,12 +204,12 @@ class WTPoller:
     """
 
     def __init__(self, db):
-        self.db          = db
-        self._playwright = None
-        self._context    = None
-        self._page       = None
-        self._running    = False
-        # Mis à jour après chaque goto()
+        self.db           = db
+        self._playwright  = None
+        self._context     = None
+        self._page        = None
+        self._running     = False
+        self._http_client: httpx.AsyncClient | None = None
         self._user_agent  = ""
         self._cookies     = {}
 
@@ -252,11 +245,24 @@ class WTPoller:
         raw_cookies      = await self._context.cookies()
         self._cookies    = {c["name"]: c["value"] for c in raw_cookies}
 
+        # Client httpx partagé — pool de connexions persistent entre tous les téléchargements
+        self._http_client = httpx.AsyncClient(
+            headers={
+                "User-Agent": self._user_agent,
+                "Referer":    "https://warthunder.com/",
+            },
+            cookies=self._cookies,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            timeout=30,
+        )
+
         log.info("Playwright prêt — %d cookies chargés", len(self._cookies))
 
     async def stop(self):
         """Ferme Playwright proprement."""
         self._running = False
+        if self._http_client:
+            await self._http_client.aclose()
         if self._context:
             await self._context.close()
         if self._playwright:
@@ -378,7 +384,7 @@ class WTPoller:
             try:
                 wrpl_files = await download_wrpl_files(
                     base_url, session_hex, dest,
-                    self._user_agent, self._cookies,
+                    self._http_client,
                 )
 
                 if wrpl_files:
@@ -457,6 +463,8 @@ class WTPoller:
             if not items:
                 break
 
+            # Résout les session_hex de toute la page en une passe
+            page_sids: list[tuple[str, dict]] = []
             for item in items:
                 sid = item.get("sessionIdHex") or ""
                 if not sid:
@@ -464,15 +472,20 @@ class WTPoller:
                         sid = hex(int(item.get("sessionId", 0)))[2:]
                     except Exception:
                         continue
+                page_sids.append((sid, item))
 
-                window_start = get_session_window_start(datetime.now(timezone.utc))
+            # 1 seule requête SQLite pour toute la page
+            known_set = self.db.sessions_exist_batch([s for s, _ in page_sids])
+            window_start = get_session_window_start(datetime.now(timezone.utc))
+
+            for sid, item in page_sids:
                 item_start = item.get("startTime", 0)
                 if window_start and item_start and item_start < window_start:
                     log.debug("SQB %s hors créneau → arrêt pagination", sid)
                     stop_pagination = True
                     break
 
-                if self.db.session_exists(sid):
+                if sid in known_set:
                     known_streak += 1
                     log.debug("SQB %s déjà connu (%d consécutifs)", sid, known_streak)
                     continue
@@ -510,7 +523,7 @@ class WTPoller:
         if new_count_total > 0:
             log.info("Cycle terminé : %d nouveau(x) SQB traité(s)", new_count_total)
 
-    async def poll_loop(self, interval_seconds: int = 120):
+    async def poll_loop(self, interval_seconds: int = 30):
         """
         Boucle principale asyncio — lancée depuis main.py via bot.loop.create_task().
         Polling actif uniquement dans les créneaux SQB (00h-09h et 14h-23h UTC).

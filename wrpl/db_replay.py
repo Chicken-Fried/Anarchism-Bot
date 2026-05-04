@@ -214,6 +214,18 @@ class ReplayDB:
             ).fetchone()
             return row is not None
 
+    def sessions_exist_batch(self, session_hexes: list[str]) -> set[str]:
+        """Retourne l'ensemble des session_hex déjà en base — 1 seule requête."""
+        if not session_hexes:
+            return set()
+        placeholders = ",".join("?" * len(session_hexes))
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT session_hex FROM sessions WHERE session_hex IN ({placeholders})",
+                session_hexes,
+            ).fetchall()
+        return {r["session_hex"] for r in rows}
+
     def _get_lineups_for_clan(
         self, clan_tag: str, session_slot: Optional[str] = None
     ) -> list[dict]:
