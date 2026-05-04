@@ -405,7 +405,9 @@ class ReplayDB:
             # 2. Players + clans
             clan_teams: dict[str, int] = {}  # clan_tag → team_num
             players_by_slot = {}
-            errored_players = set()
+            errored_players  = set()
+            # véhicule fiable par joueur : le plus fréquent (>= 2 fois) ou le parsé si inconnu
+            canonical_vehicles: dict[tuple, str] = {}
 
             for slot, p in replay_data.players.items():
                 if not p.name or p.name.startswith("slot#"):
@@ -415,17 +417,41 @@ class ReplayDB:
                 if clan and p.team:
                     clan_teams[clan] = p.team
 
-                # ← CHECK: Ce joueur a-t-il un véhicule différent enregistré?
-                existing_vehicle = conn.execute(
-                    """SELECT vehicle FROM players 
-                       WHERE name=? AND clan_tag=? AND vehicle != ? LIMIT 1""",
-                    (p.name, clan, p.vehicle or ""),
-                ).fetchone()
+                # ── CHECK: fiabilité du véhicule par fréquence ──────────────
+                # Un véhicule vu >= 2 fois pour ce joueur = fiable.
+                # Erreur seulement si le véhicule dominant (>= 2x) ≠ véhicule parsé
+                # ET que le véhicule parsé est rare (< 2x).
+                vehicle_freq = conn.execute(
+                    """SELECT vehicle, COUNT(*) AS cnt
+                       FROM players
+                       WHERE name=? AND clan_tag=? AND vehicle != ''
+                       GROUP BY vehicle ORDER BY cnt DESC LIMIT 10""",
+                    (p.name, clan),
+                ).fetchall()
 
-                error_reason = None
-                if existing_vehicle:
-                    error_reason = f"vehicle_mismatch: had {existing_vehicle['vehicle']}, now {p.vehicle}"
-                    errored_players.add((p.name, clan))
+                error_reason   = None
+                parsed_vehicle = p.vehicle or ""
+                canonical_v    = parsed_vehicle  # par défaut
+
+                if vehicle_freq:
+                    top_vehicle = vehicle_freq[0]["vehicle"]
+                    top_count   = vehicle_freq[0]["cnt"]
+                    current_cnt = next(
+                        (r["cnt"] for r in vehicle_freq if r["vehicle"] == parsed_vehicle), 0
+                    )
+
+                    if top_count >= 2:
+                        # Le véhicule dominant devient la référence pour la lineup
+                        canonical_v = top_vehicle
+                        if top_vehicle != parsed_vehicle and current_cnt < 2:
+                            # Le parser a sorti un véhicule rare : probable erreur de parsing
+                            error_reason = (
+                                f"vehicle_mismatch: dominant={top_vehicle}({top_count}x), "
+                                f"parsed={parsed_vehicle}({current_cnt}x)"
+                            )
+                            errored_players.add((p.name, clan))
+
+                canonical_vehicles[(p.name, clan)] = canonical_v
 
                 conn.execute(
                     """INSERT INTO players
@@ -474,24 +500,27 @@ class ReplayDB:
 
             # 5. Lineups (une par clan, dédupliquée)
             for clan, team_num in clan_teams.items():
-                team_players = [
-                    {
+                team_players = []
+                for p in players_by_slot.values():
+                    if normalize_clan_tag(p.clan_tag or "") != clan:
+                        continue
+                    # Utilise le véhicule canonique (fiable par fréquence) plutôt que le parsé
+                    best_vehicle = canonical_vehicles.get((p.name, clan), p.vehicle or "")
+                    team_players.append({
                         "name":         p.name,
-                        "vehicle":      p.vehicle or "",
-                        "country": getattr(p, "country", "") or "",
+                        "vehicle":      best_vehicle,
+                        "country":      getattr(p, "country", "") or "",
                         "vehicle_name": getattr(p, "vehicle_name", "") or "",
                         "vehicle_type": getattr(p, "vehicle_type", "") or "",
-                    }
-                    for p in players_by_slot.values()
-                    if normalize_clan_tag(p.clan_tag or "") == clan
-                ]
+                    })
                 if not team_players:
                     continue
 
-                # ← CHECK: La lineup contient-elle un joueur en erreur?
-                has_error = any((p["name"], clan) in errored_players for p in team_players)
-                if has_error:
-                    log.warning(f"Lineup écarté pour le clan {clan}: contiens des erreurs joueurs")
+                # N'écarte la lineup que si TOUS les joueurs du clan ont un véhicule inconnu
+                # (plus de rejet sur simple mismatch de parsing)
+                all_unknown = all(p["vehicle"] in ("", "?") for p in team_players)
+                if all_unknown:
+                    log.warning("Lineup écarté pour le clan %s : aucun véhicule fiable", clan)
                     continue
 
                 lhash = lineup_hash(team_players)
