@@ -37,7 +37,7 @@ REPLAYS_DIR   = os.path.abspath(ENV_DB_REPLAYS_PATH)
 USER_DATA_DIR = os.path.abspath(ENV_USER_DATA_PATCH)
 
 # ── Config ────────────────────────────────────────────────────────────────
-MAX_PARTS          = 26          # 0000.wrpl → 0025.wrpl max
+MAX_PARTS          = 30          # 0000.wrpl → 0030.wrpl max
 MAX_DL_CONCURRENT  = 5           # téléchargements parallèles par session
 
 SQB_PAYLOAD = {
@@ -59,6 +59,7 @@ SQB_PAYLOAD = {
 def get_session_slot(dt: datetime) -> str | None:
     h = dt.hour
     if 0 <= h < 9:   return "morning"
+    #if 14 <= h < 23: return "evening"
     if 14 <= h < 23: return "evening"
     return None
 
@@ -69,10 +70,17 @@ def get_session_window_start(dt: datetime) -> float | None:
     Permet de filtrer les replays : on ne traite que ceux
     dont startTime >= début du créneau actuel.
     """
-    h = dt.hour
+    """h = dt.hour
     if 0 <= h < 9: #0 <= h < 9
         return dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     if 14 <= h < 23: #14 <= h < 23
+        return dt.replace(hour=14, minute=0, second=0, microsecond=0).timestamp()
+    return None"""
+
+    h = dt.hour
+    if 0 <= h < 9:  # 0 <= h < 9
+        return dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    if 14 <= h < 23:  # 14 <= h < 23
         return dt.replace(hour=14, minute=0, second=0, microsecond=0).timestamp()
     return None
 
@@ -137,6 +145,8 @@ async def download_wrpl_files(
             file_url  = f"{base_url.rstrip('/')}/{part_name}"
             file_path = dest_dir / part_name
 
+            log.debug("Téléchargement %s...", part_name)
+
             # Skip si déjà téléchargé et valide
             if file_path.exists() and file_path.stat().st_size >= WRPL_MIN_SIZE:
                 try:
@@ -150,6 +160,7 @@ async def download_wrpl_files(
                     pass
 
             ok = await _download_part(client, file_url, file_path)
+
             if ok:
                 log.debug("  %s/%s OK", session_hex, part_name)
                 downloaded.append(str(file_path))
@@ -325,14 +336,39 @@ class WTPoller:
 
         # Téléchargement via httpx async (ne bloque pas asyncio)
         dest = Path(f"{REPLAYS_DIR}/{session_hex}")
-        wrpl_files = await download_wrpl_files(
-            base_url, session_hex, dest,
-            self._user_agent, self._cookies,
-        )
+
+        wrpl_files = None
+        last_error = None
+
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            log.info("Tentative %d/%d de téléchargement...", attempt, max_retries)
+
+            try:
+                wrpl_files = await download_wrpl_files(
+                    base_url, session_hex, dest,
+                    self._user_agent, self._cookies,
+                )
+
+                if wrpl_files:
+                    log.info("✓ Téléchargement réussi : %d fichiers", len(wrpl_files))
+                    break
+
+            except Exception as exc:
+                log.error("Erreur tentative %d: %s", attempt, exc)
+                last_error = exc
+                wrpl_files = None
+
+            if attempt < max_retries and not wrpl_files:
+                wait_time = 5 * attempt
+                log.warning("Échec tentative %d. Attente %d sec avant retry...",
+                            attempt, wait_time)
+                await asyncio.sleep(wait_time)
+
         if not wrpl_files:
-            log.warning("Aucun fichier .wrpl valide pour %s — "
-                        "les fichiers reçus ne sont pas au format WT "
-                        "(peut-être une session trop ancienne ou un problème réseau)", session_hex)
+            log.warning("Impossible de télécharger après %d tentatives %s",
+                        max_retries,
+                        f"(dernier erreur: {last_error})" if last_error else "")
             return False
 
         total_size = sum(Path(f).stat().st_size for f in wrpl_files)
