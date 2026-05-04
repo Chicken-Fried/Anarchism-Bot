@@ -37,9 +37,10 @@ REPLAYS_DIR   = os.path.abspath(ENV_DB_REPLAYS_PATH)
 USER_DATA_DIR = os.path.abspath(ENV_USER_DATA_PATCH)
 
 # ── Config ────────────────────────────────────────────────────────────────
-MAX_PARTS          = 30          # 0000.wrpl → 0030.wrpl max
-MAX_DL_CONCURRENT  = 5           # téléchargements parallèles par session (parts d'un même item)
-MAX_ITEM_CONCURRENT = 4          # items traités en parallèle dans poll_once
+MAX_PARTS           = 30   # 0000.wrpl → 0030.wrpl max
+MAX_DL_CONCURRENT   = 2    # parts téléchargées en parallèle (2 max pour ne pas spam le serveur)
+MAX_ITEM_CONCURRENT = 4    # items traités en parallèle dans poll_once
+DL_STAGGER_DELAY    = 0.5  # délai (sec) entre chaque requête dans un batch (anti-burst 429)
 
 SQB_PAYLOAD = {
     "gameMode":         ["arcade", "realistic", "simulation"],
@@ -177,6 +178,9 @@ async def download_wrpl_files(
             file_path.unlink(missing_ok=True)
 
         async with sem:
+            # Petit délai pour étaler les requêtes et éviter le burst → 429
+            if part_idx > 0:
+                await asyncio.sleep(DL_STAGGER_DELAY * (part_idx % MAX_DL_CONCURRENT))
             status = await _download_part(client, file_url, file_path)
 
         if status == _DL_OK:
