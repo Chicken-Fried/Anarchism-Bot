@@ -75,6 +75,7 @@ def _enrich_vehicle(vehicle_id: str) -> tuple:
         return "", "", 0.0
     return (
         entry.get("full_name", ""),
+        entry.get("country", ""),
         entry.get("vehicle_type", ""),
         float(entry.get("realistic_ground_br") or 0),
         entry.get("image_path", ""),
@@ -170,6 +171,7 @@ class ReplayDB:
                 slot                    INTEGER,
                 name                    TEXT NOT NULL,
                 clan_tag                TEXT,
+                country                 TEXT,
                 vehicle                 TEXT,
                 vehicle_name            TEXT,
                 vehicle_type            TEXT,
@@ -179,7 +181,9 @@ class ReplayDB:
                 deaths                  INTEGER DEFAULT 0,
                 assists                 INTEGER DEFAULT 0,
                 score                   INTEGER DEFAULT 0,
-                activity                REAL DEFAULT 0
+                activity                REAL DEFAULT 0,
+                errored                 INTEGER DEFAULT 0,
+                error_reason            TEXT
             );
 
             CREATE TABLE IF NOT EXISTS lineups (
@@ -270,14 +274,14 @@ class ReplayDB:
                            s.map, s.timestamp, s.winner_team
                     FROM lineups l JOIN sessions s ON l.session_id=s.id
                     WHERE l.clan_tag=? AND l.session_slot=?
-                    ORDER BY s.inserted_at DESC"""
+                    ORDER BY s.inserted_at DESC""" # ← Récent d'abord
                 params = (clan_tag, session_slot)
             else:
                 query = """SELECT l.id, l.session_id, l.lineup_hash, l.session_slot,
                            s.map, s.timestamp, s.winner_team
                     FROM lineups l JOIN sessions s ON l.session_id=s.id
                     WHERE l.clan_tag=?
-                    ORDER BY s.inserted_at DESC"""
+                    ORDER BY s.inserted_at DESC""" # ← Récent d'abord
                 params = (clan_tag,)
 
             rows = conn.execute(query, params).fetchall()
@@ -389,6 +393,7 @@ class ReplayDB:
             # 2. Players + clans
             clan_teams: dict[str, int] = {}  # clan_tag → team_num
             players_by_slot = {}
+            errored_players = set()
 
             for slot, p in replay_data.players.items():
                 if not p.name or p.name.startswith("slot#"):
@@ -398,12 +403,24 @@ class ReplayDB:
                 if clan and p.team:
                     clan_teams[clan] = p.team
 
+                # ← CHECK: Ce joueur a-t-il un véhicule différent enregistré?
+                existing_vehicle = conn.execute(
+                    """SELECT vehicle FROM players 
+                       WHERE name=? AND clan_tag=? AND vehicle != ? LIMIT 1""",
+                    (p.name, clan, p.vehicle or ""),
+                ).fetchone()
+
+                error_reason = None
+                if existing_vehicle:
+                    error_reason = f"vehicle_mismatch: had {existing_vehicle['vehicle']}, now {p.vehicle}"
+                    errored_players.add((p.name, clan))
+
                 conn.execute(
                     """INSERT INTO players
                        (session_id, slot, name, clan_tag, vehicle,
-                        vehicle_name, vehicle_type, vehicle_image_patch, 
-                        team, kills, deaths, assists, score, activity)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        vehicle_name, country, vehicle_type, vehicle_image_patch, 
+                        team, kills, deaths, assists, score, activity, errored, error_reason)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         session_db_id,
                         p.slot,
@@ -411,14 +428,17 @@ class ReplayDB:
                         clan,
                         p.vehicle or "",
                         (getattr(p, "vehicle_name", "") or "") or _enrich_vehicle(p.vehicle or "")[0],
-                        (getattr(p, "vehicle_type", "") or "") or _enrich_vehicle(p.vehicle or "")[1],
-                        (getattr(p, "vehicle_image_path", "") or "") or _enrich_vehicle(p.vehicle or "")[3],
+                        (getattr(p, "country", "") or "") or _enrich_vehicle(p.vehicle or "")[1],
+                        (getattr(p, "vehicle_type", "") or "") or _enrich_vehicle(p.vehicle or "")[2],
+                        (getattr(p, "vehicle_image_path", "") or "") or _enrich_vehicle(p.vehicle or "")[4],
                         p.team,
                         p.kills,
                         p.deaths,
                         p.assists,
                         p.score,
-                        p.activity
+                        p.activity,
+                        1 if error_reason else 0,
+                        error_reason,
                     ),
                 )
 
@@ -446,6 +466,7 @@ class ReplayDB:
                     {
                         "name":         p.name,
                         "vehicle":      p.vehicle or "",
+                        "country": getattr(p, "country", "") or "",
                         "vehicle_name": getattr(p, "vehicle_name", "") or "",
                         "vehicle_type": getattr(p, "vehicle_type", "") or "",
                     }
@@ -453,6 +474,12 @@ class ReplayDB:
                     if normalize_clan_tag(p.clan_tag or "") == clan
                 ]
                 if not team_players:
+                    continue
+
+                # ← CHECK: La lineup contient-elle un joueur en erreur?
+                has_error = any((p["name"], clan) in errored_players for p in team_players)
+                if has_error:
+                    log.warning(f"Lineup écarté pour le clan {clan}: contiens des erreurs joueurs")
                     continue
 
                 lhash = lineup_hash(team_players)
@@ -464,12 +491,13 @@ class ReplayDB:
                     (clan, session_slot, lhash),
                 ).fetchone()
 
-                conn.execute(
-                    """INSERT INTO lineups
-                       (session_id, clan_tag, session_slot, lineup_hash, inserted_at)
-                       VALUES (?,?,?,?,?)""",
-                    (session_db_id, clan, session_slot, lhash, now),
-                )
+                if not existing:
+                    conn.execute(
+                        """INSERT INTO lineups
+                           (session_id, clan_tag, session_slot, lineup_hash, inserted_at)
+                           VALUES (?,?,?,?,?)""",
+                        (session_db_id, clan, session_slot, lhash, now),
+                    )
 
             conn.commit()
             log.info("Session %s insérée (id=%d)", session_hex, session_db_id)
@@ -495,26 +523,26 @@ class ReplayDB:
 
             # 1. Suppression des dossiers physiques
             for row in rows:
-                session_hex = row["session_hex"]
-                folder_to_delete = Path(REPLAYS_PATH) / session_hex
+                folder_to_delete = Path(REPLAYS_PATH) / row["session_hex"]
 
                 try:
                     if folder_to_delete.exists() and folder_to_delete.is_dir():
                         shutil.rmtree(folder_to_delete)
-                        log.info("Dossier supprimé : %s", folder_to_delete.name)
-                    else:
-                        log.warning("Dossier introuvable pour la session %s, skipping disk cleanup.", session_hex)
                 except Exception as e:
-                    log.error("Erreur lors de la suppression du dossier %s : %s", session_hex, e)
+                    log.error("Erreur dossier %s : %s", row["session_hex"], e)
 
-            # 2. Suppression des données SQL
-            for row in rows:
-                sid = row["id"]
-                # Note : Si vous avez configuré ON DELETE CASCADE, ces lignes sont inutiles !
-                conn.execute("DELETE FROM players WHERE session_id=?", (sid,))
-                conn.execute("DELETE FROM teams WHERE session_id=?", (sid,))
-                conn.execute("DELETE FROM lineups WHERE session_id=?", (sid,))
-                conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
+            # 2. Suppression SQL groupée (Beaucoup plus rapide)
+            sids = [row["id"] for row in rows]
+            placeholders = ','.join(['?'] * len(sids))
+            try:
 
-            conn.commit()
-            log.info("Nettoyage DB : %d sessions supprimées", len(rows))
+                conn.execute(f"DELETE FROM players WHERE session_id IN ({placeholders})", sids)
+                conn.execute(f"DELETE FROM teams WHERE session_id IN ({placeholders})", sids)
+                conn.execute(f"DELETE FROM lineups WHERE session_id IN ({placeholders})", sids)
+                conn.execute(f"DELETE FROM sessions WHERE id IN ({placeholders})", sids)
+
+                conn.commit()
+                log.info("Nettoyage terminé : %d dossiers et sessions supprimés", len(rows))
+            except Exception as e:
+                conn.rollback()
+                log.error("Erreur lors de la suppression SQL : %s", e)

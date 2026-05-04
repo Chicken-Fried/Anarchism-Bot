@@ -39,10 +39,12 @@ from dataclasses import asdict
 from typing import Any, Optional, Tuple
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from datetime import datetime, timezone
 
 from wrpl.models.wrpl_config import (WRPLHeader, RawPacket, PlayerFromSettings, PlayerFromSlot, MpiSignature, ChatMessage,
                                 KillEntry, Award, EntityMovement, PlayerVehicle, PlayerStats, Player,
                                 ReplayData, VehicleInfo)
+from database.db_informations import InformationDB
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -91,36 +93,6 @@ def _get_json(url: str, timeout: int = 30) -> dict | list:
                                                 "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
-
-
-"""@dataclass
-class WRPLHeader:
-    magic:              bytes
-    version:            int
-    level:              str
-    level_settings:     str
-    battle_type:        str
-    environment:        str
-    visibility:         str
-    results_blk_offset: int
-    difficulty:         int
-    session_type:       int
-    session_id:         int
-    replay_part_number: int
-    mset_size:          int
-    settings_blk_size:  int
-    loc_name:           str
-    start_time:         int
-    time_limit:         int
-    score_limit:        int
-    battle_class:       str
-    battle_kill_streak: str
-    is_server:          bool = False
-
-    @property
-    def session_hex(self) -> str:
-        return f"{self.session_id:016x}"""
-
 
 def _cstr(b: bytes) -> str:
     end = b.find(b'\x00')
@@ -190,28 +162,6 @@ def read_vlsize(stream) -> Optional[int]:
 # =============================================================================
 # 3. LECTURE DU FLUX DE PAQUETS (PacketStreamReader — packetReader.go)
 # =============================================================================
-
-"""@dataclass
-class RawPacket:
-    seq:          int
-    current_time: int    # ms depuis le début de la partie
-    packet_type:  int
-    payload:      bytes
-
-    TYPE_NAMES = {
-        0: "EndMarker", 1: "StartMarker", 2: "AircraftSmall",
-        3: "Chat",      4: "MPI",         5: "NextSegment",
-        6: "ECS",       7: "Snapshot",    8: "ReplayHeaderInfo",
-    }
-
-    @property
-    def type_name(self) -> str:
-        return self.TYPE_NAMES.get(self.packet_type, f"Unknown({self.packet_type})")
-
-    @property
-    def time_s(self) -> float:
-        return self.current_time / 1000.0"""
-
 
 def read_packets(stream):
     """Générateur → RawPacket depuis le flux décompressé."""
@@ -411,7 +361,8 @@ def parse_fat_blk(buf: bytes) -> dict:
             put_kv(m, flat[c][0], build(c))
         return m
 
-    print(f"BUILD A PARTIR DE {buf}\n{build(0)}")
+    print(f"BUILD A PARTIR DE {buf}\n{build(0)}\n")
+    print(f"KEYS DE BUILD {list(build(0).keys())[:8] if build(0) else ''}")
     return build(0)
 
 
@@ -481,20 +432,6 @@ def parse_blk(data: bytes, _debug: bool = False) -> Optional[dict]:
 # =============================================================================
 # 6. EXTRACTION DES JOUEURS DEPUIS LE SETTINGS BLK
 # =============================================================================
-
-"""@dataclass
-class PlayerFromSettings:
-    #Données statiques présentes dès le header du replay.
-    slot:         int            # index dans mplace (0-based)
-    name:         str
-    clan_tag:     str
-    user_id:      int
-    team:         int            # 1 = équipe A, 2 = équipe B, 0 = unknown
-    vehicle:      str            # shortname du véhicule principal
-    country:      str            # nation (usa, ussr, germany, …)
-    rank:         int
-    exp:          int"""
-
 
 def _get_str(d, *keys) -> str:
     """Navigue dans un dict BLK et retourne le premier champ trouvé, en str."""
@@ -992,19 +929,6 @@ def parse_chat(pk: RawPacket) -> Optional[ChatMessage]:
 
 KILL_SIG = bytes([0x02, 0x58, 0x58, 0xf0])
 
-
-"""@dataclass
-class KillEntry:
-    seq:             int
-    time_ms:         int
-    damage_type:     int   # control & 0xF0 : 0x10=AP, 0x20=APHE, 0x30=HEAT, 0x40=HE/Frag
-    killer_slot:     int
-    killer_vehicle:  str
-    victim_slot:     int   # -1 si non déterminé
-    victim_vehicle:  str
-    remainder_hex:   str"""
-
-
 def parse_kill(pk: RawPacket) -> Optional[KillEntry]:
     if len(pk.payload) < 4 or pk.payload[:4] != KILL_SIG:
         return None
@@ -1040,15 +964,6 @@ def parse_kill(pk: RawPacket) -> Optional[KillEntry]:
 AWARD_SIG = bytes([0x02, 0x58, 0x78, 0xf0])
 
 
-"""@dataclass
-class Award:
-    seq:        int
-    time_ms:    int
-    award_type: int
-    player_slot: int
-    award_name: str"""
-
-
 def parse_award(pk: RawPacket) -> Optional[Award]:
     if len(pk.payload) < 4 or pk.payload[:4] != AWARD_SIG:
         return None
@@ -1080,16 +995,6 @@ def _update_win_team(stats: list[PlayerStats], awards: list[Award]) -> list[Play
 MOVEMENT_CONDITIONS = {0: 0xff, 1: 0x0f, 5: 0xa3, 6: 0xf0, 10: 0x00, 11: 0x00, 13: 0x14}
 
 
-"""@dataclass
-class EntityMovement:
-    seq:     int
-    time_ms: int
-    eid:     int
-    x:       float
-    y:       float
-    z:       float"""
-
-
 def _matches(payload: bytes, cond: dict) -> bool:
     return all(i < len(payload) and payload[i] == v for i, v in cond.items())
 
@@ -1117,21 +1022,6 @@ def parse_movement(pk: RawPacket) -> Optional[EntityMovement]:
 
 # --- Player Vehicle Verification (type 6) ---
 
-"""@dataclass
-class PlayerVehicle:
-    seq:               int
-    slot:              int
-    vehicle_id:        str | None = None
-    vehicle_name:      str | None = None
-    country:           str | None = None
-    vehicle_type:      str | None = None
-    vehicle_br:        int | None = None
-    image_path:        str | None = None"""
-
-IDX_PLAYERS_NUM = [b'01_', b'O1_', b'02_', b'O2_', b'03_', b'O3_', b'04_', b'O4_', b'05_', b'O5_', b'06_', b'O6_',
-                   b'07_', b'O7_', b'08_', b'O8_', b'09_', b'O9_', b'10_', b'11_', b'12_', b'13_', b'14_', b'15_',
-                   b'16_']
-
 def _matches_pk(pk: RawPacket) -> bool:
     """Vérifie si le payload correspond au pattern ECS type 6."""
     d = pk.payload
@@ -1151,16 +1041,16 @@ def _matches_pk(pk: RawPacket) -> bool:
     return True
 
 def calcul_br_season() -> float | None:
-    from database.db_informations import InformationDB
-    from datetime import datetime
-
     year = datetime.now().year
     month = datetime.now().month
 
     season_num = int(month / 2) if not int(month % 2) else math.ceil(month / 2)
 
     db_sqb = InformationDB()
-    br_season = db_sqb.get_schedular_for_season(year=year, season_num=season_num)
+    br_season = db_sqb.get_scheduler_for_season(
+        year=year,
+        season_num=season_num
+    )
     if not br_season:
         return None
 
@@ -1300,7 +1190,9 @@ def _search_slot(pk: RawPacket) -> tuple:
 
     return -1, None
 
-def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[PlayerVehicle] | list:
+def _search_vehicle_check(
+        pk: RawPacket, vehicle_db: dict | None, lineup_player: dict
+) -> list[PlayerVehicle] | list:
     '''
     Extrait le numéro de slot du payload ECS type 6.
 
@@ -1326,6 +1218,9 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[Player
         print("[PlayerVehicle] [!] vehicle_db is empty")
         return []
 
+    if not lineup_player:
+        print("[PlayerVehicle] [!] Imprécision pour la compo!")
+
     vehicle_ids = list(vehicle_db.keys())
 
     parts = [p for p in re.findall(b'[ -~]+', d) if len(p) >= 2]
@@ -1337,21 +1232,21 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[Player
     # Le pattern ne s'occupe plus de chercher "player" ou "0", il cherche juste l'index.
     index_pattern = re.compile(b'[a-zA-Z]?(?:1[0-6]|[1-9])_0')
 
+    # print(f"d PAYLOAD:          {pk}")
+    # print(f"INDEX PATTERN:      {parts}")
+
     for i, part in enumerate(parts):
         match = index_pattern.search(part)
-
-        #print(f"PART   : {part.decode('utf-8', errors='ignore')} | Matches found: {match}")
+        # print(f"PART   : {part.decode('utf-8', errors='ignore')} | Matches found: {match}")
 
         if match:
             # On a trouvé un index (ex: b't1_', b'14_', b'K5_')
             full_match = match.group(0)
-            print(f"FULL MATCH   : {full_match}")
+            # print(f"FULL MATCH   : {full_match}")
 
             matched_prefix.append((i, full_match))
 
-
-
-    #print(f"MATCHED PREFIX:      {matched_prefix}")
+    # print(f"MATCHED PREFIX:      {matched_prefix}")
 
     if matched_prefix:
         for idx, prefix_found in matched_prefix:
@@ -1382,15 +1277,37 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[Player
                 print(f"CLEAN NAME:      {clean_name}")
 
                 best_match_for_this_part = None
-                check_match = vehicle_db.keys()
+                check_match = lineup_player.get(slot, [])
 
-                matches = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
+                matches_1 = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
+                if len(check_match) > 1:
+                    matches_2 = difflib.get_close_matches(clean_name, check_match, n=1, cutoff=0.7)
+                else:
+                    matches_2 = check_match
 
-                if matches:
-                    matched_id = matches[0]
+                print(f"1st CLEAN MATCH: {clean_name}")
+                print(f"1st CHECK MATCH: {matches_2}")
 
-                    if matched_id in check_match:
-                        best_match_for_this_part = vehicle_db[matched_id]
+                if matches_1 and matches_2:
+                    matched_dict = matches_1[0]
+                    if len(check_match) > 1:
+                        matched_line_v = matches_2[0]
+                    else:
+                        matched_line_v = matches_2[0]
+
+                    if matched_dict == matched_line_v:
+                        best_match_for_this_part = vehicle_db[matched_dict]
+                    else:
+                        best_match_for_this_part = vehicle_db[matched_line_v]
+
+
+                elif not matches_1 and matches_2:
+                    matched_line_v = matches_2[0]
+                    best_match_for_this_part = vehicle_db[matched_line_v]
+
+                elif matches_1 and not matches_2:
+                    matched_dict = matches_1[0]
+                    best_match_for_this_part = vehicle_db[matched_dict]
 
                 # Si on a trouvé un véhicule pour ce segment précis
                 if best_match_for_this_part:
@@ -1412,7 +1329,7 @@ def _search_vehicle_check(pk: RawPacket, vehicle_db: dict | None) -> list[Player
 
 
 def _double_check_vehicle(
-        pk: RawPacket, vehicle_db: dict | None, unfound_slot: list
+        pk: RawPacket, vehicle_db: dict | None, lineup_player: dict, unfound_slot: list
 ) -> list[PlayerVehicle] | list:
     '''
     Revérifie les slots non trouvés dans les paquets.
@@ -1445,27 +1362,10 @@ def _double_check_vehicle(
     matched_prefix = []
     vehicles_players = []
 
-    """indices_pattern = b'|'.join([re.escape(p) for p in IDX_PLAYERS_NUM])
-
-    # Explication du groupe de préfixe : (?:rt1|[tT]1|[tT]|)
-    # - rt1 : cherche exactement rt1
-    # - [tT]1 : cherche t1 ou T1
-    # - [tT]  : cherche t ou T tout seul
-    # - |     : ou rien du tout (vide)
-    pattern = re.compile(b'(?:rt1|[tT]1|[tT]|)(?:' + indices_pattern + b')(?:player|0|$)')
-    """
-
     # On définit uniquement ce qui est l'INDEX (le cœur du problème)
     # On cherche : une lettre optionnelle + un nombre entre 1 et 16 + un underscore
     # Le pattern ne s'occupe plus de chercher "player" ou "0", il cherche juste l'index.
     index_pattern = re.compile(b'[a-zA-Z]?(?:1[0-6]|[1-9])_0')
-
-    """for i, part in enumerate(parts):
-        match = pattern.search(part)
-        if match:
-            for prefix in IDX_PLAYERS_NUM:
-                if prefix in match.group(0):
-                    matched_prefix.append((i, prefix))"""
 
     for i, part in enumerate(parts):
         match = index_pattern.search(part)
@@ -1482,6 +1382,8 @@ def _double_check_vehicle(
             for j in unfound_slot:
                 if j % 10 == slot:
                     matched_prefix.append((i, j))
+
+    # print(f"2nd MATCHED PREFIX:      {matched_prefix}")
 
     if matched_prefix:
         for idx, slot in matched_prefix:
@@ -1502,16 +1404,36 @@ def _double_check_vehicle(
                     continue
 
                 best_match_for_this_part = None
+                check_match = lineup_player.get(slot, [])
 
-                matches = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
-                if matches:
-                    matched_id = matches[0]
+                matches_1 = difflib.get_close_matches(clean_name, vehicle_ids, n=1, cutoff=0.7)
+                if len(check_match) > 1:
+                    matches_2 = difflib.get_close_matches(clean_name, check_match, n=1, cutoff=0.7)
+                else:
+                    matches_2 = check_match
 
-                    check_match = vehicle_db.keys()
+                # print(f"2nd CLEAN MATCH: {clean_name}")
+                # print(f"2nd CHECK MATCH: {matches_2}")
 
-                    # K5_0 => correspond pas que à 5
-                    if matched_id in check_match:
-                        best_match_for_this_part = vehicle_db[matched_id]
+                if matches_1 and matches_2:
+                    matched_dict = matches_1[0]
+                    if len(check_match) > 1:
+                        matched_line_v = matches_2[0]
+                    else:
+                        matched_line_v = matches_2[0]
+
+                    if matched_dict == matched_line_v:
+                        best_match_for_this_part = vehicle_db[matched_dict]
+                    else:
+                        best_match_for_this_part = vehicle_db[matched_line_v]
+
+                elif not matches_1 and matches_2:
+                    matched_line_v = matches_2[0]
+                    best_match_for_this_part = vehicle_db[matched_line_v]
+
+                elif matches_1 and not matches_2:
+                    matched_dict = matches_1[0]
+                    best_match_for_this_part = vehicle_db[matched_dict]
 
                 # Si on a trouvé un véhicule pour ce segment précis
                 if best_match_for_this_part:
@@ -1606,13 +1528,13 @@ def _search_vehicle(pk: RawPacket, rt1_idx: int | None, slot: int, vehicle_db: d
     return None
 
 
-def parse_v_player(pk: RawPacket, vehicle_database: dict) -> Any:
+def parse_v_player(pk: RawPacket, vehicle_database: dict, lineup_player: dict) -> Any:
     try:
         if not _matches_pk(pk):
             return None
 
         results = []
-        vehicles = _search_vehicle_check(pk, vehicle_database)
+        vehicles = _search_vehicle_check(pk, vehicle_database, lineup_player)
 
         print(f"[PlayerVehicle] [!] vehicles: {vehicles}")
 
@@ -1639,7 +1561,7 @@ def parse_v_player(pk: RawPacket, vehicle_database: dict) -> Any:
         return None
 
 def _parse_from_raw_vehicles(
-        list_raw: list[bytes], vehicles_database: dict) -> dict[int, PlayerVehicle]:
+        list_raw: list[bytes], vehicles_database: dict, lineup_player: dict) -> dict[int, PlayerVehicle]:
     """
     Extrait les données des véhicules des joueurs dans les replays.
 
@@ -1660,7 +1582,10 @@ def _parse_from_raw_vehicles(
         for pk in read_packets(stream):
 
             if pk.packet_type == 6:
-                parsed_data = parse_v_player(pk, vehicles_database)
+
+                # print(f"READ STREAM:        {pk}")
+
+                parsed_data = parse_v_player(pk, vehicles_database, lineup_player)
 
                 # Normalisation en liste pour traiter uniformément (objet unique ou liste)
                 items = parsed_data if isinstance(parsed_data, list) else [parsed_data]
@@ -1695,7 +1620,7 @@ def _parse_from_raw_vehicles(
         for pk in read_packets(stream):
 
             if pk.packet_type == 6:
-                parsed_data = _double_check_vehicle(pk, vehicles_database, unfound_slot)
+                parsed_data = _double_check_vehicle(pk, vehicles_database, lineup_player, unfound_slot)
 
                 # Normalisation en liste pour traiter uniformément (objet unique ou liste)
                 items = parsed_data if isinstance(parsed_data, list) else [parsed_data]
@@ -1745,6 +1670,9 @@ def extract_vehicle_map_from_results(results: dict) -> dict[int, str]:
     if not isinstance(matching, dict):
         return vehicle_map
 
+
+    print(f"MATCHING INFO: {matching}")
+
     for uid_str, info in matching.items():
         try:
             uid = int(uid_str)
@@ -1785,7 +1713,7 @@ def extract_vehicle_map_from_results(results: dict) -> dict[int, str]:
     return vehicle_map
 
 
-def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[str]]:
+def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[str], dict]:
     """
     Extrait les statistiques de fin de partie depuis le Results BLK.
 
@@ -1804,10 +1732,10 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
     """
     stats = []
     vehicles_replay = []
-    #vehicles_by_player = []
+    vehicles_by_player = {}
 
     if not results:
-        return stats, vehicles_replay #vehicles_by_player
+        return stats, vehicles_replay, vehicles_by_player
 
     result_list = (results.get('result') or results.get('results')
                    or results.get('player') or results.get('mplace') or [])
@@ -1879,20 +1807,21 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
 
         # Fallback : matchingInfo[userId].crafts_info.array0 (rankUnused=False)
         if not vehicle and user_id:
-            #lineup_per_players = []
+            lineup_per_players = []
             matching = results.get('matchingInfo', {})
             info = matching.get(str(user_id), {}) if isinstance(matching, dict) else {}
             crafts = info.get('crafts_info', {}) if isinstance(info, dict) else {}
             if isinstance(crafts, dict):
                 for k, craft in crafts.items():
+                    print(f"CRAFT           :{craft}")
                     if isinstance(craft, dict):
                         if craft["name"]:
-                            #lineup_per_players.append(craft["name"])
+                            lineup_per_players.append(craft["name"])
 
                             if not craft["name"] in vehicles_replay:
                                 vehicles_replay.append(craft["name"])
 
-                #vehicles_by_player[i] = lineup_per_players
+                vehicles_by_player[i] = lineup_per_players
 
                 j = 0
                 while True:
@@ -1918,8 +1847,8 @@ def extract_stats_from_results(results: dict) -> tuple[list[PlayerStats], list[s
             ground_kills=ground_kills, naval_kills=naval_kills,
             vehicle=vehicle, is_winner=is_winner, raw=r,
         ))
-
-    return stats, vehicles_replay
+    print(f"LINEUP PER PLAYER         :{vehicles_by_player}")
+    return stats, vehicles_replay, vehicles_by_player
 
 
 # =============================================================================
@@ -2285,7 +2214,7 @@ def _parse_single_file(
                 elif isinstance(vehicle_player, list):
                     vehicle_players.extend(vehicle_player)"""
 
-    print(f"AWARDS:   {awards}\n")
+    # print(f"AWARDS:   {awards}\n")
 
     named_slots = sorted(set(
         slp.slot for slp in slot_players_all
@@ -2471,17 +2400,17 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
 
         all_pkt_count += pkt_count
 
-    print(f"RESULT BLK: {final_results_blk}")
+    # print(f"RESULT BLK: {final_results_blk}")
 
     # Stats depuis Results BLK
-    uncompleted_stats, possibles_vehicles_replay = extract_stats_from_results(final_results_blk or {})
+    uncompleted_stats, possibles_vehicles_replay, lineup_per_player = extract_stats_from_results(final_results_blk or {})
 
     _vdb_filter = _vehicles_filter(
         vehicles=_vdb,
         names_vehicles= possibles_vehicles_replay
     )
 
-    print(f"DB FILTER            :{_vdb_filter}")
+    # print(f"DB FILTER            :{_vdb_filter}")
 
     complete_stats = _update_win_team(
         stats=uncompleted_stats,
@@ -2490,7 +2419,8 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
 
     vehicles_players_slot = _parse_from_raw_vehicles(
         list_raw=all_raw,
-        vehicles_database=_vdb_filter
+        vehicles_database=_vdb_filter,
+        lineup_player=lineup_per_player
     )
 
     """lineup_per_player = create_lineup_player(
@@ -2525,7 +2455,7 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     total_in_dedup  = len(slot_deduped)
     named_slots_all = sorted(p.slot for p in slot_deduped.values() if p.name and p.name.strip())
 
-    print(f"  Stats    : {complete_stats}")
+    # print(f"  Stats    : {complete_stats}")
 
     if verbose:
         print(f"\n  Total paquets  : {all_pkt_count}")
@@ -2581,7 +2511,7 @@ def parse_replay_files(paths: list[str], parse_movements: bool = False,
     # Heuristique robuste : offset = min(victim_slots) - 0, ou on cherche le
     # décalage tel que les victim_slots - offset tombent dans [0, nb_joueurs)
 
-    print("PARSE REPLAYS FILES")
+    #print("PARSE REPLAYS FILES")
     net_offset = _compute_net_offset(players, all_kills)
     if verbose and net_offset != 0:
         print(f"  Offset réseau détecté : +{net_offset} (victim_slot - {net_offset} = slot_logique)")
@@ -3601,8 +3531,6 @@ Exemples :
     ap.add_argument('--csv',     action='store_true', help="Export CSV (plusieurs fichiers)")
     ap.add_argument('--prefix',  default='replay',    help="Préfixe des fichiers CSV (défaut: replay)")
     ap.add_argument('--movements', action='store_true', help="Inclure les mouvements (volumineux)")
-    ap.add_argument('--download', metavar='SESSION_HEX',
-                    help="Télécharge le replay serveur depuis Gaijin puis le parse")
     ap.add_argument('--debug-blk', action='store_true',
                     help="Affiche la structure complète des BLK (Settings + Results) pour diagnostic")
     ap.add_argument('--dump-slots', action='store_true',
@@ -3621,18 +3549,6 @@ Exemples :
     args = ap.parse_args()
 
     verbose = not args.quiet
-
-    # --- Téléchargement ---
-    if args.download:
-        print(f"Téléchargement session {args.download} ...")
-        paths = download_replay(args.download, verbose=verbose)
-        if not paths:
-            print("Aucun fichier téléchargé.", file=sys.stderr)
-            sys.exit(1)
-        print(f"Téléchargé {len(paths)} partie(s).")
-        if not args.replay:
-            # Auto-parse le dossier téléchargé
-            args.replay = [str(Path("fetchedReplays") / args.download)]
 
     if not args.replay:
         ap.print_help()
