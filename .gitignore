@@ -21,6 +21,7 @@ datamine/
 pip-log.txt
 pip-delete-this-directory.txt
 .claude/
+.api/
 
 # --- Base de données et Données locales ---
 # On ignore le contenu du dossier data, mais pas le dossier lui-même
