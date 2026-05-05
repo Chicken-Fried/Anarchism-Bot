@@ -358,6 +358,14 @@ class CancelTicket(nextcord.ui.Button):
         guild = interaction.guild
         user = interaction.user
 
+        if not interaction.user.guild_permissions.administrator:
+            print(f"[Tickets Views]   Tentative de fermeture d'un ticket | Par l'utilisateur {user.name}")
+            await interaction.followup.send(
+                "❌ Tu n'as pas la permission d'utiliser ce bouton.",
+                ephemeral=True
+            )
+            return
+
         ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
         if ticket is None:
             print(f"[Tickets Views]   Erreur lors de l'annulation du ticket | Par l'utilisateur {user.name} | "
@@ -649,6 +657,14 @@ class YesButton(nextcord.ui.Button):
         guild = interaction.guild
         user = interaction.user
 
+        if not interaction.user.guild_permissions.administrator:
+            print(f"[Tickets Views]   Tentative de fermeture d'un ticket | Par l'utilisateur {user.name}")
+            await interaction.followup.send(
+                "❌ Tu n'as pas la permission d'utiliser ce bouton.",
+                ephemeral=True
+            )
+            return
+
         ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
         print(f"YesButton      :{ticket}\n"
               f"Guild_id: {guild.id} | Channel_id: {interaction.channel.id}")
@@ -714,6 +730,14 @@ class NoButton(nextcord.ui.Button):
         view = self.view
         guild = interaction.guild
         user = interaction.user
+
+        if not interaction.user.guild_permissions.administrator:
+            print(f"[Tickets Views]   Tentative de fermeture d'un ticket | Par l'utilisateur {user.name}")
+            await interaction.followup.send(
+                "❌ Tu n'as pas la permission d'utiliser ce bouton.",
+                ephemeral=True
+            )
+            return
 
         ticket = self.db.get_open_ticket(guild_id=guild.id, channel_id=interaction.channel.id)
         if ticket is None:
