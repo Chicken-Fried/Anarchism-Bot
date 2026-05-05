@@ -1,5 +1,4 @@
 import os
-from unittest import case
 
 import nextcord
 import asyncio
@@ -61,18 +60,26 @@ class Tickets(commands.Cog):
         guild = interaction.guild
         view = OpenApplicationsView(db=self.db)
 
-        results = self.db.get_ch_application(guild.id, get_all=True)
+        channel = None
 
-        if isinstance(results, TicketViewChannels):
-            channel = guild.get_channel(results.view_channel_id)
-            if channel:
-                await interaction.followup.send(
-                    content=f"❌ - Un channel application viewer existe déjà, le voici => {channel.mention}",
-                    ephemeral=True
-                )
-            else:
-                if results:
-                    self.db.supress_ch_application(results)
+        ch_results = self.db.get_ch_application(
+            guild.id,
+            get_all=True
+        )
+
+        match ch_results:
+            case TicketViewChannels():
+                channel = guild.get_channel(ch_results.view_channel_id)
+
+                if channel:
+                    await interaction.followup.send(
+                        content=f"❌ - Un channel application viewer existe déjà, le voici => {channel.mention}",
+                        ephemeral=True
+                    )
+                    return
+
+                self.db.supress_ch_application(ch_results)
+
                 await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                             f"✅ - Création d'un nouveau channel application viewer\n"
@@ -80,42 +87,28 @@ class Tickets(commands.Cog):
                     ephemeral=True
                 )
 
-                overwrites = {
-                    guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                                            read_message_history=True),
-                    guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-                }
+            case list() as ch_lists if len(ch_lists) > 0:
+                print(f"[Tickets Cogs]   Nettoyage de {len(ch_lists)} anciens channels...")
 
-                channel = await interaction.guild.create_text_channel(
-                    name=f"📋-candidature",
-                    overwrites=overwrites,
-                    position=0
+                for config in ch_lists[:]:
+                    ch = guild.get_channel(config.view_channel_id)
+
+                    if ch:
+                        await ch.delete()
+                    self.db.supress_ch_application(config)
+
+                await interaction.followup.send(
+                    content=f"✅ - Suppression des applications viewer dans la base de données\n"
+                            f"✅ - Création d'un nouveau channel application viewer",
+                    ephemeral=True
                 )
 
-                data = TicketViewChannels(
-                    guild_id=interaction.guild.id,
-                    view_channel_id=channel.id
-                )
-                self.db.insert_ch_application(data)
+            case _:
+                pass
 
-                await channel.send(
-                    embeds=view.embd_open_ticket(),
-                    view=view
-                )
-                return
-
-        if isinstance(results, list):
-            for result in results:
-                channel = guild.get_channel(results.view_channel_id)
-                if channel:
-                    await channel.delete()
-                    self.db.supress_ch_application(result)
-                else:
-                    if result:
-                        self.db.supress_ch_application(result)
-
+        if channel is None:
             await interaction.followup.send(
-                content=f"✅ - Suppression des applications viewer dans la base de données\n"
+                content=f"✅ - Aucun application viewer dans la base de données\n"
                         f"✅ - Création d'un nouveau channel application viewer",
                 ephemeral=True
             )
@@ -144,36 +137,6 @@ class Tickets(commands.Cog):
             )
             return
 
-        await interaction.followup.send(
-            content=f"✅ - Aucun application viewer dans la base de données\n"
-                    f"✅ - Création d'un nouveau channel application viewer",
-            ephemeral=True
-        )
-
-        overwrites = {
-            guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                                    read_message_history=True),
-            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-        }
-
-        channel = await interaction.guild.create_text_channel(
-            name=f"📋-candidature",
-            overwrites=overwrites,
-            position=0
-        )
-
-        data = TicketViewChannels(
-            guild_id=interaction.guild.id,
-            view_channel_id=channel.id
-        )
-        self.db.insert_ch_application(data)
-
-        await channel.send(
-            embeds=view.embd_open_application(),
-            view=view
-        )
-        return
-
     @nextcord.slash_command(
         name="add-ticket-channel",
         description="Ajoute le channel dédié aux tickets",
@@ -185,62 +148,56 @@ class Tickets(commands.Cog):
         guild = interaction.guild
         view = OpenTicketsView(db=self.db)
 
-        results = self.db.get_ch_ticket(guild.id, get_all=True)
+        channel = None
 
-        if isinstance(results, TicketViewChannels):
-            channel = guild.get_channel(results.view_channel_id)
-            if channel:
-                await interaction.followup.send(
-                    content=f"❌ - Un channel ticket viewer existe déjà, le voici => {channel.mention}",
-                    ephemeral=True
-                )
-            else:
-                if results:
-                    self.db.supress_ch_ticket(results)
+        ch_results = self.db.get_ch_ticket(
+            guild.id,
+            get_all=True
+        )
+
+        match ch_results:
+            case TicketViewChannels():
+                channel = guild.get_channel(ch_results.view_channel_id)
+
+                if channel:
+                    await interaction.followup.send(
+                        content=f"❌ - Un channel ticket viewer existe déjà, le voici => {channel.mention}",
+                        ephemeral=True
+                    )
+                    return
+
+                self.db.supress_ch_application(ch_results)
+
                 await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
-                        f"✅ - Création d'un nouveau channel ticket viewer\n"
-                        f"Si il existe vous pouvez le supprimer en toute sureté !",
+                            f"✅ - Création d'un nouveau channel ticket viewer\n"
+                            f"Si il existe vous pouvez le supprimer en toute sureté !",
                     ephemeral=True
                 )
 
-                overwrites = {
-                    guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                              read_message_history=True),
-                    guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-                }
+            case list() as ch_lists if len(ch_lists) > 0:
+                print(f"[Tickets Cogs]   Nettoyage de {len(ch_lists)} anciens channels...")
 
-                channel = await interaction.guild.create_text_channel(
-                    name=f"📥-ouvrir-un-ticket",
-                    overwrites=overwrites,
-                    position=0
+                for config in ch_lists[:]:
+                    ch = guild.get_channel(config.view_channel_id)
+                    if ch:
+                        await ch.delete()
+
+                    self.db.supress_ch_ticket(config)
+
+                await interaction.followup.send(
+                    content=f"✅ - Suppression des ticket viewer dans la base de données\n"
+                            f"✅ - Création d'un nouveau channel ticket viewer",
+                    ephemeral=True
                 )
 
-                data = TicketViewChannels(
-                    guild_id=interaction.guild.id,
-                    view_channel_id=channel.id
-                )
-                self.db.insert_ch_ticket(data)
+            case _:
+                pass
 
-                await channel.send(
-                    embeds=view.embd_open_ticket(),
-                    view=view
-                )
-                return
-
-        if isinstance(results, list):
-            for result in results:
-                channel = guild.get_channel(results.view_channel_id)
-                if channel:
-                    await channel.delete()
-                    self.db.supress_ch_ticket(result)
-                else:
-                    if result:
-                        self.db.supress_ch_ticket(result)
-
+        if channel is None:
             await interaction.followup.send(
-                content=f"✅ - Suppression des ticket viewer dans la base de données\n"
-                    f"✅ - Création d'un nouveau channel ticket viewer",
+                content=f"✅ - Aucun ticket viewer dans la base de données\n"
+                        f"✅ - Création d'un nouveau channel ticket viewer",
                 ephemeral=True
             )
 
@@ -268,36 +225,6 @@ class Tickets(commands.Cog):
             )
             return
 
-        await interaction.followup.send(
-            content=f"✅ - Aucun ticket viewer dans la base de données\n"
-                f"✅ - Création d'un nouveau channel ticket viewer",
-            ephemeral=True
-        )
-
-        overwrites = {
-            guild.default_role: PermissionOverwrite(view_channel=True, send_messages=False, read_messages=True,
-                                                    read_message_history=True),
-            guild.me: PermissionOverwrite(view_channel=True, send_messages=True)
-        }
-
-        channel = await interaction.guild.create_text_channel(
-            name=f"📥-ouvrir-un-ticket",
-            overwrites=overwrites,
-            position=0
-        )
-
-        data = TicketViewChannels(
-            guild_id=interaction.guild.id,
-            view_channel_id=channel.id
-        )
-        self.db.insert_ch_ticket(data)
-
-        await channel.send(
-            embeds=view.embd_open_ticket(),
-            view=view
-        )
-        return
-
 
     @nextcord.slash_command(
         name="close-viewer-ticket",
@@ -308,24 +235,23 @@ class Tickets(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         guild = interaction.guild
-        results = self.db.get_ch_ticket(guild.id, get_all=True)
+        ch_results = self.db.get_ch_ticket(guild.id, get_all=True)
 
-        if isinstance(results, TicketViewChannels):
-            channel = guild.get_channel(results.view_channel_id)
-            if channel:
-                self.db.supress_ch_ticket(results)
-                await interaction.followup.send(
-                    content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
-                    ephemeral=True
-                )
+        match ch_results:
+            case TicketViewChannels():
+                channel = guild.get_channel(ch_results.view_channel_id)
 
-                await asyncio.sleep(10)
+                if channel:
+                    self.db.supress_ch_ticket(ch_results)
+                    await interaction.followup.send(
+                        content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
+                        ephemeral=True
+                    )
+                    await asyncio.sleep(10)
+                    await channel.delete()
+                    return
 
-                await channel.delete()
-                return
-            else:
-                if results:
-                    self.db.supress_ch_ticket(results)
+                self.db.supress_ch_ticket(ch_results)
                 await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                         f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
@@ -334,21 +260,29 @@ class Tickets(commands.Cog):
                 )
                 return
 
-        if isinstance(results, list):
-            for result in results:
-                channel = guild.get_channel(result.view_channel_id)
-                if channel:
-                    await channel.delete()
-                    self.db.supress_ch_ticket(result)
-                else:
-                    if result:
-                        self.db.supress_ch_ticket(result)
-            return
+            case list() as ch_lists if len(ch_lists) > 0:
+                for config in ch_lists[:]:
+                    channel = guild.get_channel(config.view_channel_id)
+                    if channel:
+                        await channel.delete()
+
+                    self.db.supress_ch_ticket(config)
+
+                    await interaction.followup.send(
+                        content=f"✅ - Suppression du channel dans la base de données\n"
+                                f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
+                                f"Si il existe vous pouvez le supprimer en toute sureté !",
+                        ephemeral=True
+                    )
+                    return
+
+            case _:
+                pass
 
         await interaction.followup.send(
             content=f"❌ - Aucun channel a été trouver dans la base de données\n"
-                f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
-                f"Si il existe vous pouvez le supprimer en toute sureté !",
+                    f"❌ - Aucun channel avec le Viewer Ticket a été trouver dans le serveur\n"
+                    f"Si il existe vous pouvez le supprimer en toute sureté !",
             ephemeral=True
         )
 
@@ -361,24 +295,23 @@ class Tickets(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         guild = interaction.guild
-        results = self.db.get_ch_application(guild.id, get_all=True)
+        ch_results = self.db.get_ch_application(guild.id, get_all=True)
 
-        if isinstance(results, TicketViewChannels):
-            channel = guild.get_channel(results.view_channel_id)
-            if channel:
-                self.db.supress_ch_application(results)
-                await interaction.followup.send(
-                    content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
-                    ephemeral=True
-                )
+        match ch_results:
+            case TicketViewChannels():
+                channel = guild.get_channel(ch_results.view_channel_id)
 
-                await asyncio.sleep(10)
+                if channel:
+                    self.db.supress_ch_application(ch_results)
+                    await interaction.followup.send(
+                        content=f"✅ - Suppression du channel dans le serveur et dans la base de données",
+                        ephemeral=True
+                    )
+                    await asyncio.sleep(10)
+                    await channel.delete()
+                    return
 
-                await channel.delete()
-                return
-            else:
-                if results:
-                    self.db.supress_ch_application(results)
+                self.db.supress_ch_application(ch_results)
                 await interaction.followup.send(
                     content=f"✅ - Suppression du channel dans la base de données\n"
                             f"❌ - Aucun channel avec le Viewer Application a été trouver dans le serveur\n"
@@ -387,16 +320,16 @@ class Tickets(commands.Cog):
                 )
                 return
 
-        if isinstance(results, list):
-            for result in results:
-                channel = guild.get_channel(result.view_channel_id)
-                if channel:
-                    await channel.delete()
-                    self.db.supress_ch_application(result)
-                else:
-                    if result:
-                        self.db.supress_ch_application(result)
-            return
+            case list() as ch_lists if len(ch_lists) > 0:
+                for config in ch_lists[:]:
+                    channel = guild.get_channel(config.view_channel_id)
+                    if channel:
+                        await channel.delete()
+                    self.db.supress_ch_application(config)
+                return
+
+            case _:
+                pass
 
         await interaction.followup.send(
             content=f"❌ - Aucun channel a été trouver dans la base de données\n"
