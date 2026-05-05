@@ -53,17 +53,69 @@ class OpenApplicationsView(nextcord.ui.View):
 
             return [embed]
 
-        embed = nextcord.Embed(
+        embed1 = nextcord.Embed(
             title="🧾 Poser une Candidature !",
             description="🐍 - Bienvenue à la PYTHON ! Nous sommes un escadron francophone à la quête de l'excellence "
-                        "pour atteindre le sommet ! Nous sommes ravis que tu nous es choisi pour ta candidature.\n"
-                        "En cliquant sur le bouton, ci-dessous, un ticket sera ouvert rien que pour toi.",
+                        "pour atteindre le sommet ! Nous sommes ravis que tu nous es choisi pour ta candidature.\n",
             color=nextcord.Color.dark_purple()
         )
 
-        embed.set_footer(text="PYTHON - EMPIRE GALACTIQUE")
+        embed1.add_field(
+            name="📝 Étape 1",
+            value="Je t'invite à lire nos conditions, ci-dessous, avant de poursuivre"
+        )
 
-        return [embed]
+        embed2 = nextcord.Embed(
+            title="🐍 L'Escadron PYTHON",
+            description="Découvre notre univers et ce que nous attendons de nos membres.",
+            color=nextcord.Color.dark_blue()
+        )
+
+        embed2.add_field(
+            name="🎯 | Notre Mission",
+            value=(
+                "> *La synergie fait la force.*\n"
+                "• **Objectif :** Jouer intelligemment et dominer les batailles d’escadron.\n"
+                "• **Engagement :** Progression constante et top classement SQB."
+            ),
+            inline=False
+        )
+
+        # Bloc 2 : L'ambiance & Le Discord
+        embed2.add_field(
+            name="🤝 | Notre ADN",
+            value=(
+                "**Ce que nous privilégions :**\n"
+                "• Jeu d’équipe structuré & entraide.\n"
+                "• Ambiance vocale active (SQB, training).\n"
+                "• Respect et esprit semi-compétitif."
+            ),
+            inline=False
+        )
+
+        # Bloc 3 : Critères de recrutement (Le plus important)
+        embed2.add_field(
+            name="📋 | Critères & Profil",
+            value=(
+                "**Prérequis techniques :**\n"
+                "• Min. **2 nations RANG V** débloquées (Tank/Avion).\n"
+                "• **1300+ points d'activité** dès la première saison.\n\n"
+                "**Profil recherché :**\n"
+                "• Joueur d'escouade, réactif et respectueux."
+            ),
+            inline=False
+        )
+
+        # Bloc 4 : Conclusion / Contact
+        embed2.add_field(
+            name="📩 | Prêt à nous rejoindre ?",
+            value="Alors clique sous le bouton, ci-dessous '📥 Poser une candidature'",
+            inline=False
+        )
+
+        embed2.set_footer(text="PYTHON - EMPIRE GALACTIQUE")
+
+        return [embed1, embed2]
 
     def embd_response(self, ticket: Ticket):
         error_page = self.error_page
@@ -101,8 +153,14 @@ class OpenApplicationsView(nextcord.ui.View):
         )
 
         embed1.add_field(
-            name="📝 Étape 1",
+            name="📝 Étape 2",
             value="Clique sur le bouton **'Apposer la candidature'** ou utilise le lien ci-dessus."
+        )
+
+        embed1.add_field(
+            name="📝 | Je te remet nos conditions d'adhésion, ci dessous, bonne lecture !",
+            value="",
+            inline=False
         )
 
         embed2 = nextcord.Embed(
