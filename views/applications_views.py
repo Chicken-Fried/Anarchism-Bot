@@ -68,7 +68,7 @@ class OpenApplicationsView(nextcord.ui.View):
         embed2 = nextcord.Embed(
             title="🐍 L'Escadron PYTHON",
             description="Découvre notre univers et ce que nous attendons de nos membres.",
-            color=nextcord.Color.dark_blue()
+            color=nextcord.Color.dark_purple()
         )
 
         embed2.add_field(
@@ -149,7 +149,7 @@ class OpenApplicationsView(nextcord.ui.View):
                 "remplir le formulaire ci-dessous :"
             ),
             url="https://docs.google.com/forms/d/e/1FAIpQLSe78vzCSrXA4c_t556UmeMJOA-ajl9-h1Lwrc01C7PgOVkmkA/viewform",
-            color=nextcord.Color.dark_blue()
+            color=nextcord.Color.dark_purple()
         )
 
         embed1.add_field(
@@ -166,7 +166,7 @@ class OpenApplicationsView(nextcord.ui.View):
         embed2 = nextcord.Embed(
             title="🐍 L'Escadron PYTHON",
             description="Découvre notre univers et ce que nous attendons de nos membres.",
-            color=nextcord.Color.dark_blue()
+            color=nextcord.Color.dark_purple()
         )
 
         # Bloc 1 : Vision & Objectifs
