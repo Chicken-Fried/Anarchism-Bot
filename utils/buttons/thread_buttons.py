@@ -1,4 +1,10 @@
 import nextcord
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
+url = os.getenv("STAFF_RECRUITMENT_SHEET_URL")
 
 class UrlGoogleSheetApplicationButton(nextcord.ui.Button):
 
@@ -12,7 +18,6 @@ class UrlGoogleSheetApplicationButton(nextcord.ui.Button):
         is_admin = user.guild_permissions.administrator
 
         if is_admin:
-            url = "https://docs.google.com/spreadsheets/d/1DodycLQR8zrrZlz85yEfWlku4-iyc-f9Qfkxs4yror0/edit?resourcekey=&gid=763109175#gid=763109175"
             await interaction.followup.send(
                 content=f"✅ **Accès Autorisé.** Voici le lien : [Cliquez ici]({url})",
                 ephemeral=True

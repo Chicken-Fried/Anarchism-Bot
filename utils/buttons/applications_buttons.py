@@ -10,6 +10,7 @@ from utils.threads.threads import create_admin_thread
 
 from dotenv import load_dotenv
 load_dotenv()
+url = os.getenv("RECRUITMENT_FORM_URL")
 TICKETS_LOG_CHANNEL_ID = os.getenv('STAFF_SERVER_TICKETS_LOG_CHANNEL_ID')
 GUILD_STAFF_SERVER_ID = os.getenv('GUILD_STAFF_SERVER_ID')
 
@@ -199,7 +200,7 @@ class UrlFormularyButton(nextcord.ui.Button):
 
     def __init__(self):
         super().__init__(label="Apposer la candidature", style=nextcord.ButtonStyle.green,
-                         url="https://docs.google.com/forms/d/e/1FAIpQLSe78vzCSrXA4c_t556UmeMJOA-ajl9-h1Lwrc01C7PgOVkmkA/viewform")
+                         url=url)
 
     async def callback(self, interaction: nextcord.Interaction):
         user = interaction.user

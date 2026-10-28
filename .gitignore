@@ -62,3 +62,10 @@ docker-compose.yml
 .DS_Store
 Thumbs.db
 /datamine/
+
+
+# --- IDEs & Editors ---
+.idea/
+.vscode/
+*.swp
+*.swo

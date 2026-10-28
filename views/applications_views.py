@@ -1,7 +1,13 @@
+import os
 import nextcord
 from utils.buttons.applications_buttons import (OpenApplication, CloseTicket, YesButton, NoButton,
                                                 UrlFormularyButton)
 from database.db_tickets import TicketsDB, Ticket
+
+from dotenv import load_dotenv
+load_dotenv()
+
+url = os.getenv("RECRUITMENT_FORM_URL")
 
 class OpenApplicationsView(nextcord.ui.View):
     STEPS = [
@@ -148,7 +154,7 @@ class OpenApplicationsView(nextcord.ui.View):
                 "Ta candidature commence ici. Pour nous rejoindre, tu dois impérativement "
                 "remplir le formulaire ci-dessous :"
             ),
-            url="https://docs.google.com/forms/d/e/1FAIpQLSe78vzCSrXA4c_t556UmeMJOA-ajl9-h1Lwrc01C7PgOVkmkA/viewform",
+            url=url,
             color=nextcord.Color.dark_purple()
         )
 
